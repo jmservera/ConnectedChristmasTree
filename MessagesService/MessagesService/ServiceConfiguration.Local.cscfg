@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ServiceConfiguration serviceName="MessagesService" xmlns="http://schemas.microsoft.com/ServiceHosting/2008/10/ServiceConfiguration" osFamily="4" osVersion="*" schemaVersion="2015-04.2.6">
+  <Role name="MessagesServiceRole">
+    <Instances count="1" />
+    <ConfigurationSettings>
+      <Setting name="Microsoft.WindowsAzure.Plugins.Diagnostics.ConnectionString" value="UseDevelopmentStorage=true" />
+      <Setting name="IoTHubConnectionString" value="HostName=CCTPragueIOtHub.azure-devices.net;SharedAccessKeyName=iothubowner;SharedAccessKey=QHmO19Sb8WtM2Qp6HY6dfNHXhmagM+yx6Rz6pxC1rB4=" />
+    </ConfigurationSettings>
+  </Role>
+</ServiceConfiguration>
