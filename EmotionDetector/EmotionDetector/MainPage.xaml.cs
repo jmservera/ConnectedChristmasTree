@@ -179,10 +179,12 @@ namespace EmotionDetector
                 if(message!= null)
                 {
                     var jsonMessage = Encoding.UTF8.GetString(message.GetBytes());
+                    log($"Message received: {jsonMessage}");
                     if(jsonMessage!= null)
                     {
                         signal.Set();
                     }
+                    await deviceClient.CompleteAsync(message);
                 }
             }
         }
@@ -242,7 +244,7 @@ namespace EmotionDetector
                                 new { Emotion="Surprise", Score= nearestOne.Scores.Surprise }};
 
                         var max = list.ToList().OrderByDescending(a => a.Score).First();
-                        return new EmotionResult {Id="12", Date = DateTime.Now, Emotion = max.Emotion, Score = max.Score };
+                        return new EmotionResult {Id="12", Date = DateTime.Now, Emotion = max.Emotion, Score = (int) (max.Score*100.0) };
                     }
                     else
                     {
