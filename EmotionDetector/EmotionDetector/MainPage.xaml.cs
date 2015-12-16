@@ -1,6 +1,7 @@
 ﻿using Microsoft.Azure.Devices.Client;
 using Microsoft.ProjectOxford.Emotion;
 using Microsoft.ProjectOxford.Vision;
+using Newtonsoft.Json;
 using Shared;
 using System;
 using System.Collections.Generic;
@@ -33,13 +34,32 @@ namespace EmotionDetector
     /// </summary>
     public sealed partial class MainPage : Page
     {
-        static string EmotionAPIKey = "05e3be7b91eb499aa61132b6e73dd283";
-        static string VisionAPIKey = "9853d2e94d7a4383a3f57fd68b67a994";
+        public class Config
+        {
+            public string EmotionAPIKey { get; set; }
+            public string VisionAPIKey { get; set; }
+            public string IotHubUri { get; set; }
+            public string DeviceName { get; set; }
+            public string DeviceKey { get; set; }
+
+            static Config _config;
+            public static Config Default
+            {
+                get
+                {
+                    if (_config == null)
+                    {
+                        _config = JsonConvert.DeserializeObject<Config>(File.ReadAllText("config.json"));
+                    }
+                    return _config;
+                }
+            }
+        }
 
         MediaCapture mediaCapture;
         DispatcherTimer dispatcherTimer = new DispatcherTimer() { Interval = TimeSpan.FromSeconds(1) };
-        EmotionServiceClient emotionClient = new EmotionServiceClient(EmotionAPIKey);
-        VisionServiceClient visionClient = new VisionServiceClient(VisionAPIKey);
+        EmotionServiceClient emotionClient;
+        VisionServiceClient visionClient;
         DeviceClient deviceClient;
 
 
@@ -51,13 +71,14 @@ namespace EmotionDetector
 
         CancellationTokenSource cancellationSource;
 
-        const string iotHubUri = "CCTPragueIOtHub.azure-devices.net";
-        const string deviceName = "EmotionDetector";
-        const string deviceKey = "XIakbI1GwhMBtGbdpCcTocl6ecK1H95eIKAXYtHQ4e8=";
+
 
         public MainPage()
         {
             this.InitializeComponent();
+
+             emotionClient = new EmotionServiceClient(Config.Default.EmotionAPIKey);
+             visionClient = new VisionServiceClient(Config.Default.VisionAPIKey);
         }
 
         protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -232,8 +253,8 @@ namespace EmotionDetector
 
         private void initHub(CancellationToken token)
         {
-            var key = AuthenticationMethodFactory.CreateAuthenticationWithRegistrySymmetricKey(deviceName, deviceKey);
-            deviceClient = DeviceClient.Create(iotHubUri, key, TransportType.Http1);
+            var key = AuthenticationMethodFactory.CreateAuthenticationWithRegistrySymmetricKey(Config.Default.DeviceName, Config.Default.DeviceKey);
+            deviceClient = DeviceClient.Create(Config.Default.IotHubUri, key, TransportType.Http1);
 
             startReceiving(token);
         }
