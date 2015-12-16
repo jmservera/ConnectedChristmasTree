@@ -1,6 +1,7 @@
 ﻿using Microsoft.Azure.Devices.Client;
 using Microsoft.ProjectOxford.Emotion;
 using Microsoft.ProjectOxford.Vision;
+using Shared;
 using System;
 using System.Collections.Generic;
 using System.IO;

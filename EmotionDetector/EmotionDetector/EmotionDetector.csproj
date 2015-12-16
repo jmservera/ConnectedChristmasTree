@@ -98,7 +98,6 @@
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
     </Compile>
-    <Compile Include="EmotionResult.cs" />
     <Compile Include="MainPage.xaml.cs">
       <DependentUpon>MainPage.xaml</DependentUpon>
     </Compile>
@@ -135,6 +134,10 @@
     <ProjectReference Include="..\OxfordClientLibrary\OxfordClientLibrary.csproj">
       <Project>{34daa01d-3f6b-4622-9425-726b0b4a6c78}</Project>
       <Name>OxfordClientLibrary</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Shared\Shared.csproj">
+      <Project>{83efe167-3877-4fa2-b211-11a92e7fee71}</Project>
+      <Name>Shared</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
