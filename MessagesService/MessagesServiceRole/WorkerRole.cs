@@ -75,63 +75,60 @@ namespace MessagesServiceRole
         {
             ServiceClient client = ServiceClient.CreateFromConnectionString(iotHubConnectionString);
             await client.OpenAsync();
-            var eventHubClient = EventHubClient.CreateFromConnectionString(iotHubConnectionString, "messages/events");
-            var eventHubPartitionsCount = eventHubClient.GetRuntimeInformation().PartitionCount;
-            string emotionPartition = EventHubPartitionKeyResolver.ResolveToPartition("EmotionDetector", eventHubPartitionsCount);
-            var emotionEventHubReceiver = eventHubClient.GetConsumerGroup("message").CreateReceiver(emotionPartition, DateTime.Now);
+            List<Task> streamTasks = new List<Task>();
 
-            var streamClient = EventHubClient.CreateFromConnectionString(eventHubConnectionString, "ioteventhubcct");
+            streamTasks.AddRange(await 
+                createEventHubClients(client,eventHubConnectionString, "ioteventhubcct", null,cancellationToken));
+            streamTasks.AddRange(await
+                createEventHubClients(client, iotHubConnectionString, "messages/events", "message",cancellationToken));
+           
+            await Task.WhenAll(streamTasks);
+        }
+
+        private async Task<IEnumerable<Task>> createEventHubClients(ServiceClient client,
+            string eventHubConnectionString, string eventHubPath, string consumerGroup, CancellationToken token)
+        {
+            List<Task> tasks = new List<Task>();
+            var streamClient = EventHubClient.CreateFromConnectionString(eventHubConnectionString, eventHubPath);
             var streamClientInfo = streamClient.GetRuntimeInformation();
             var partitions = streamClientInfo.PartitionIds;
-            List<Task> streamTasks = new List<Task>();
             foreach (var partition in partitions)
             {
-                var partReceiver = await streamClient.GetDefaultConsumerGroup().CreateReceiverAsync(partition);
-                var task = Task.Run(async () =>
+                log($"Create {eventHubPath} event reciever for partition: {partition}");
+
+                EventHubReceiver partReceiver;
+                if (string.IsNullOrEmpty(consumerGroup))
                 {
-                    // TODO: Replace the following with your own logic.
-                    while (!cancellationToken.IsCancellationRequested)
-                    {
-                        var messages = await partReceiver.ReceiveAsync(20);
+                    partReceiver = await streamClient.GetDefaultConsumerGroup().CreateReceiverAsync(partition, DateTime.Now);
+                }
+                else
+                {
+                    partReceiver = await streamClient.GetConsumerGroup(consumerGroup).CreateReceiverAsync(partition, DateTime.Now);
+
+                }
+                Task task = createReceiverTask(client, partReceiver, token);
+                tasks.Add(task);
+            }
+            return tasks;
+        }
+
+        private static Task createReceiverTask(ServiceClient client, EventHubReceiver receiver, CancellationToken cancellationToken)
+        {
+            return Task.Run(async () =>
+            {
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    try {
+                        var messages = await receiver.ReceiveAsync(20);
                         await resolveMessages(client, messages);
-                        //client.SendAsync("Tree",...)
-                        //client.SendAsync("EmotionDetector",...)
                         await Task.Delay(1000);
                     }
-                }, cancellationToken);
-                streamTasks.Add(task);
-            }
-
-            string treePartition = EventHubPartitionKeyResolver.ResolveToPartition("Tree", eventHubPartitionsCount);
-            var treeEventHubReceiver = eventHubClient.GetConsumerGroup("message").CreateReceiver(treePartition, DateTime.Now);
-
-            var t1 = Task.Run(async () =>
-             {
-                // TODO: Replace the following with your own logic.
-                while (!cancellationToken.IsCancellationRequested)
-                 {
-                     var messages = await emotionEventHubReceiver.ReceiveAsync(20);
-                     await resolveMessages(client, messages);
-                    //client.SendAsync("Tree",...)
-                    //client.SendAsync("EmotionDetector",...)
-                    await Task.Delay(1000);
-                 }
-             }, cancellationToken);
-            streamTasks.Add(t1);
-            var t2 = Task.Run(async () =>
-            {
-                // TODO: Replace the following with your own logic.
-                while (!cancellationToken.IsCancellationRequested)
-                {
-                    var messages = await treeEventHubReceiver.ReceiveAsync(20);
-                    await resolveMessages(client, messages);
-                    //client.SendAsync("Tree",...)
-                    //client.SendAsync("EmotionDetector",...)
-                    await Task.Delay(1000);
+                    catch(Exception ex)
+                    {
+                        log(ex.Message);
+                    }
                 }
             }, cancellationToken);
-            streamTasks.Add(t2);
-            await Task.WhenAll(streamTasks);
         }
 
         private static async Task resolveMessages(ServiceClient client, IEnumerable<EventData> messages)
@@ -146,7 +143,7 @@ namespace MessagesServiceRole
                 message.Ack = DeliveryAcknowledgement.Full;
                 message.MessageId = Guid.NewGuid().ToString();
                 await client.SendAsync(m.SystemProperties["to"].ToString(), message);
-                Debug.WriteLine("Message sent");
+                log($"Message sent to {m.SystemProperties["to"].ToString()}");
             }
 
             var treeMessages = messages.Where((m) =>
@@ -160,8 +157,14 @@ namespace MessagesServiceRole
                 message.Ack = DeliveryAcknowledgement.Full;
                 message.MessageId = Guid.NewGuid().ToString();
                 await client.SendAsync("Tree", message);
-                Debug.WriteLine("Tree Message sent");
+                log($"Tree Message sent {message}");
             }
+
+        }
+
+        private static void log(string message)
+        {
+            Debug.WriteLine(message);
         }
     }
 }
