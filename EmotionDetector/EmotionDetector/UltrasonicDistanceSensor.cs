@@ -9,11 +9,10 @@ using Windows.Devices.Gpio;
 
 namespace EmotionDetector
 {
-    public class UltrasonicDistanceSensor
+    public class UltrasonicDistanceSensor:IDisposable
     {
-        private readonly GpioPin gpioPinTrig;
-        // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
-        private readonly GpioPin gpioPinEcho;
+        private GpioPin gpioPinTrig;
+        private GpioPin gpioPinEcho;
         bool init;
 
         public UltrasonicDistanceSensor(int trigGpioPin, int echoGpioPin)
@@ -62,6 +61,20 @@ namespace EmotionDetector
                 gpioPinTrig.Write(GpioPinValue.Low);
                 await Task.Delay(2000);
                 init = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            if(gpioPinEcho!= null)
+            {
+                gpioPinEcho.Dispose();
+                gpioPinEcho = null;
+            }
+            if(gpioPinTrig!= null)
+            {
+                gpioPinTrig.Dispose();
+                gpioPinTrig = null;
             }
         }
     }

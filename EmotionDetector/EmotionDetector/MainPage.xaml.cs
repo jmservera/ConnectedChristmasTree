@@ -8,6 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.Enumeration;
 using Windows.Devices.Gpio;
@@ -42,11 +43,13 @@ namespace EmotionDetector
         DeviceClient deviceClient;
 
 
-        UltrasonicDistanceSensor distanceSensor = new UltrasonicDistanceSensor(23, 24);
+        UltrasonicDistanceSensor distanceSensor;
         System.Threading.ManualResetEventSlim signal=new System.Threading.ManualResetEventSlim(false);
 
 
         GpioPin buttonPin;
+
+        CancellationTokenSource cancellationSource;
 
         const string iotHubUri = "CCTPragueIOtHub.azure-devices.net";
         const string deviceName = "EmotionDetector";
@@ -60,6 +63,13 @@ namespace EmotionDetector
         protected async override void OnNavigatedTo(NavigationEventArgs e)
         {
             base.OnNavigatedTo(e);
+            await start();
+        }
+
+        private async Task start()
+        {
+            distanceSensor= new UltrasonicDistanceSensor(23, 24);
+            cancellationSource = new CancellationTokenSource();
 
             var controller = GpioController.GetDefault();
             buttonPin = controller.OpenPin(4);
@@ -68,9 +78,9 @@ namespace EmotionDetector
             else
                 buttonPin.SetDriveMode(GpioPinDriveMode.Input);
             buttonPin.DebounceTimeout = TimeSpan.FromMilliseconds(50);
-            buttonPin.ValueChanged += Pin_ValueChanged;
+            buttonPin.ValueChanged += buttonValueChanged;
 
-            if (await Init())
+            if (await Init(cancellationSource.Token))
             {
                 while (true)
                 {
@@ -80,45 +90,70 @@ namespace EmotionDetector
                     log("person detected, getting emotion");
                     var guid = Guid.NewGuid();
                     //take a picture
-                    var emotion=await GetEmotion();
-                    log($"emotion detected: {emotion.Emotion} {emotion.Score}");
-                    emotion.SessionId = guid;
-                    //send a message to the tree: lights on
-
-                    var emotionJson= Newtonsoft.Json.JsonConvert.SerializeObject(emotion);
-                    Message m = new Message(Encoding.UTF8.GetBytes(emotionJson));
-                    m.To = "Tree";
-                    log("Sending to tree");
-                    await deviceClient.SendEventAsync(m);
-                    log("Message sent");
-                    //wait for the tree lights
-                    await Task.Run(() =>
+                    var emotion = await GetEmotion(cancellationSource.Token);
+                    if (emotion != null)
                     {
-                        signal.Wait();
-                    });
-                    log("Signal received, taking new emotion");
-                    signal.Reset();
+                        log($"emotion detected: {emotion.Emotion} {emotion.Score}");
+                        emotion.SessionId = guid;
+                        //send a message to the tree: lights on
 
-                    emotion = await GetEmotion();
-                    emotion.SessionId = guid;
-                    log($"new emotion detected: {emotion.Emotion} {emotion.Score}");
+                        var emotionJson = Newtonsoft.Json.JsonConvert.SerializeObject(emotion);
+                        Message m = new Message(Encoding.UTF8.GetBytes(emotionJson));
+                        m.To = "Tree";
+                        log("Sending to tree");
+                        await deviceClient.SendEventAsync(m);
+                        log("Message sent");
+                        //wait for the tree lights
+                        await Task.Run(() =>
+                        {
+                            signal.Wait();
+                        });
+                        log("Signal received, taking new emotion");
+                        signal.Reset();
 
-                    emotionJson = Newtonsoft.Json.JsonConvert.SerializeObject(emotion);
-                    m = new Message(Encoding.UTF8.GetBytes(emotionJson));
-                    m.To = "Tree";
+                        emotion = await GetEmotion(cancellationSource.Token);
+                        if (emotion != null)
+                        {
+                            emotion.SessionId = guid;
+                            log($"new emotion detected: {emotion.Emotion} {emotion.Score}");
 
-                    await deviceClient.SendEventAsync(m);
-                    log("New emotion sent to tree");
+                            emotionJson = Newtonsoft.Json.JsonConvert.SerializeObject(emotion);
+                            m = new Message(Encoding.UTF8.GetBytes(emotionJson));
+                            m.To = "Tree";
 
+                            await deviceClient.SendEventAsync(m);
+                            log("New emotion sent to tree");
+                        }
+                    }
                 }
             }
         }
 
-        private void Pin_ValueChanged(Windows.Devices.Gpio.GpioPin sender, Windows.Devices.Gpio.GpioPinValueChangedEventArgs args)
+        private async void buttonValueChanged(Windows.Devices.Gpio.GpioPin sender, Windows.Devices.Gpio.GpioPinValueChangedEventArgs args)
         {
-            if(args.Edge== Windows.Devices.Gpio.GpioPinEdge.FallingEdge)
+            if(args.Edge== GpioPinEdge.FallingEdge)
             {
-                log("button pushed");
+                log("button pushed, reset");
+                cancellationSource.Cancel();
+                await Log.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () => 
+                {
+                    if (mediaCapture != null)
+                    {
+                        await mediaCapture.StopPreviewAsync();
+                        mediaCapture = null;
+                    }
+                    if (buttonPin != null)
+                    {
+                        buttonPin.Dispose();
+                        buttonPin = null;
+                    }
+                    if (distanceSensor != null)
+                    {
+                        distanceSensor.Dispose();
+                        distanceSensor = null;
+                    }
+                    await start();
+                });
             }
         }
 
@@ -146,14 +181,14 @@ namespace EmotionDetector
 
         uint width, height;
 
-        private async Task<bool> Init()
+        private async Task<bool> Init(CancellationToken token)
         {
             try
             {
-                var init1= initSensor();
-                var init2= initCamera();
+                var init1= initSensor(token);
+                var init2= initCamera(token);
                 await Task.WhenAll(init1, init2);
-                initHub();
+                initHub(token);
                 return true;
             }
             catch (Exception ex)
@@ -163,15 +198,15 @@ namespace EmotionDetector
             return false;
         }
 
-        private void initHub()
+        private void initHub(CancellationToken token)
         {
             var key = AuthenticationMethodFactory.CreateAuthenticationWithRegistrySymmetricKey(deviceName, deviceKey);
             deviceClient = DeviceClient.Create(iotHubUri, key, TransportType.Http1);
 
-            startReceiving();
+            startReceiving(token);
         }
 
-        private async void startReceiving()
+        private async void startReceiving(CancellationToken token)
         {
             while (true)
             {
@@ -186,15 +221,21 @@ namespace EmotionDetector
                     }
                     await deviceClient.CompleteAsync(message);
                 }
+                if (token.IsCancellationRequested)
+                {
+                    break;
+                }
             }
         }
 
-        private async Task initCamera()
+        private async Task initCamera(CancellationToken token)
         {
             //media capture initialization
             log("finding devices");
             mediaCapture = new MediaCapture();
             var cameras = await DeviceInformation.FindAllAsync(DeviceClass.VideoCapture);
+            if (token.IsCancellationRequested)
+                return;
             var camera = cameras.First();
             log("initializing");
             var settings = new MediaCaptureInitializationSettings() { VideoDeviceId = camera.Id };
@@ -205,17 +246,19 @@ namespace EmotionDetector
             width = streamprops.Width;
             height = streamprops.Height;
             ViewFinder.Source = mediaCapture;
+            if (token.IsCancellationRequested)
+                return;
             await mediaCapture.StartPreviewAsync();
             log("preview started");
         }
 
-        private async Task initSensor()
+        private async Task initSensor(CancellationToken token)
         {
             //sensor initialization
             await distanceSensor.InitAsync();
         }
 
-        async Task<EmotionResult> GetEmotion()
+        async Task<EmotionResult> GetEmotion(CancellationToken token)
         {
             try
             {
@@ -223,11 +266,13 @@ namespace EmotionDetector
                 using (var mediaStream = new MemoryStream())
                 {
                     await mediaCapture.CapturePhotoToStreamAsync(ImageEncodingProperties.CreateJpeg(), mediaStream.AsRandomAccessStream());
-                    var streamCopy = new MemoryStream();
+                    if (token.IsCancellationRequested)
+                        return null;
                     mediaStream.Position = 0L;
                     log("Getting emotion");
                     var emotions = await emotionClient.RecognizeAsync(mediaStream);
-
+                    if (token.IsCancellationRequested)
+                        return null;
                     if (emotions != null && emotions.Length > 0)
                     {
                         log("Emotion recognized");
