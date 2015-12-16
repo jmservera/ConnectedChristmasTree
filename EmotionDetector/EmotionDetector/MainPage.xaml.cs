@@ -95,11 +95,12 @@ namespace EmotionDetector
                     {
                         log($"emotion detected: {emotion.Emotion} {emotion.Score}");
                         emotion.SessionId = guid;
+                        emotion.Stage = 0;
                         //send a message to the tree: lights on
 
                         var emotionJson = Newtonsoft.Json.JsonConvert.SerializeObject(emotion);
                         Message m = new Message(Encoding.UTF8.GetBytes(emotionJson));
-                        m.To = "Tree";
+                       // m.To = "Tree";
                         log("Sending to tree");
                         await deviceClient.SendEventAsync(m);
                         log("Message sent");
@@ -115,11 +116,12 @@ namespace EmotionDetector
                         if (emotion != null)
                         {
                             emotion.SessionId = guid;
+                            emotion.Stage = 1;
                             log($"new emotion detected: {emotion.Emotion} {emotion.Score}");
 
                             emotionJson = Newtonsoft.Json.JsonConvert.SerializeObject(emotion);
                             m = new Message(Encoding.UTF8.GetBytes(emotionJson));
-                            m.To = "Tree";
+                           //m.To = "Tree";
 
                             await deviceClient.SendEventAsync(m);
                             log("New emotion sent to tree");
