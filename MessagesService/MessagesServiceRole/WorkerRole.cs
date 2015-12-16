@@ -11,6 +11,7 @@ using Microsoft.WindowsAzure.ServiceRuntime;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.Azure.Devices;
 using Microsoft.ServiceBus.Messaging;
+using Microsoft.Azure.Devices.Common;
 
 namespace MessagesServiceRole
 {
@@ -71,11 +72,30 @@ namespace MessagesServiceRole
         {
             ServiceClient client = ServiceClient.CreateFromConnectionString(iotHubConnectionString);
             await client.OpenAsync();
-            
+            var eventHubClient = EventHubClient.CreateFromConnectionString(iotHubConnectionString, "messages/events");
+            var eventHubPartitionsCount = eventHubClient.GetRuntimeInformation().PartitionCount;
+            string emotionPartition = EventHubPartitionKeyResolver.ResolveToPartition("EmotionDetector", eventHubPartitionsCount);
+            var emotionEventHubReceiver = eventHubClient.GetConsumerGroup("message").CreateReceiver(emotionPartition, DateTime.Now);
+
+            string treePartition = EventHubPartitionKeyResolver.ResolveToPartition("Tree", eventHubPartitionsCount);
+            var treeEventHubReceiver = eventHubClient.GetConsumerGroup("message").CreateReceiver(treePartition, DateTime.Now);
+
             // TODO: Replace the following with your own logic.
             while (!cancellationToken.IsCancellationRequested)
             {
-                var eventHubClient = EventHubClient.CreateFromConnectionString(iotHubConnectionString, "messages/events");
+                var messages=await emotionEventHubReceiver.ReceiveAsync(20);
+                var treeMessages= messages.Where((m) => {
+                        return m.SystemProperties.ContainsKey("to") &&  m.SystemProperties["to"]!=null;
+                    });
+                foreach(var m in treeMessages)
+                {
+                    Message message = new Message(m.GetBytes());
+                    message.Ack = DeliveryAcknowledgement.Full;
+                    message.MessageId = Guid.NewGuid().ToString();
+                    //m.SystemProperties["to"].ToString()
+                    await client.SendAsync(m.SystemProperties["to"].ToString(), message);
+                    System.Diagnostics.Debug.WriteLine("Message sent");
+                }
 
                 //client.SendAsync("Tree",...)
                 //client.SendAsync("EmotionDetector",...)
