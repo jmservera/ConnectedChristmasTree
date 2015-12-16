@@ -1,0 +1,98 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <MinimumVisualStudioVersion>11.0</MinimumVisualStudioVersion>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{34DAA01D-3F6B-4622-9425-726B0B4A6C78}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>ClientLibrary</RootNamespace>
+    <AssemblyName>ClientLibrary</AssemblyName>
+    <DefaultLanguage>en-US</DefaultLanguage>
+    <FileAlignment>512</FileAlignment>
+    <ProjectTypeGuids>{786C830F-07A1-408B-BD7F-6EE04809D6DB};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
+    <TargetFrameworkProfile>Profile111</TargetFrameworkProfile>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <SccProjectName>SAK</SccProjectName>
+    <SccLocalPath>SAK</SccLocalPath>
+    <SccAuxPath>SAK</SccAuxPath>
+    <SccProvider>SAK</SccProvider>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Emotion\ClientError.cs" />
+    <Compile Include="Emotion\ClientException.cs" />
+    <Compile Include="Common\ClientError.cs" />
+    <Compile Include="Common\ClientException.cs" />
+    <Compile Include="Common\Rectangle.cs" />
+    <Compile Include="Common\ServiceError.cs" />
+    <Compile Include="Emotion\Contract\Emotion.cs" />
+    <Compile Include="Emotion\Contract\Face.cs" />
+    <Compile Include="Emotion\Contract\FaceAttribute.cs" />
+    <Compile Include="Emotion\Contract\HeadPose.cs" />
+    <Compile Include="Emotion\Contract\FaceRectangle.cs" />
+    <Compile Include="Emotion\Contract\FaceLandmarks.cs" />
+    <Compile Include="Emotion\Contract\GroupResult.cs" />
+    <Compile Include="Emotion\Contract\IdentifyResult.cs" />
+    <Compile Include="Emotion\Contract\Person.cs" />
+    <Compile Include="Emotion\Contract\Candidate.cs" />
+    <Compile Include="Emotion\Contract\CreatePersonResult.cs" />
+    <Compile Include="Emotion\Contract\PersonFace.cs" />
+    <Compile Include="Emotion\Contract\PersonGroup.cs" />
+    <Compile Include="Emotion\Contract\FeatureCoordinate.cs" />
+    <Compile Include="Emotion\Contract\Scores.cs" />
+    <Compile Include="Emotion\Contract\SimilarFace.cs" />
+    <Compile Include="Emotion\Contract\TrainingStatus.cs" />
+    <Compile Include="Emotion\Contract\VerifyResult.cs" />
+    <Compile Include="Emotion\EmotionServiceClient.cs" />
+    <Compile Include="Emotion\FaceServiceClient.cs" />
+    <Compile Include="Emotion\IEmotionServiceClient.cs" />
+    <Compile Include="Emotion\IFaceServiceClient.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Vision\ClientError.cs" />
+    <Compile Include="Vision\ClientException.cs" />
+    <Compile Include="Vision\Contract\Adult.cs" />
+    <Compile Include="Vision\Contract\AnalysisResult.cs" />
+    <Compile Include="Vision\Contract\Category.cs" />
+    <Compile Include="Vision\Contract\Color.cs" />
+    <Compile Include="Vision\Contract\Face.cs" />
+    <Compile Include="Vision\Contract\FaceRectangle.cs" />
+    <Compile Include="Vision\Contract\ImageType.cs" />
+    <Compile Include="Vision\Contract\LanguageCodes.cs" />
+    <Compile Include="Vision\Contract\Line.cs" />
+    <Compile Include="Vision\Contract\Metadata.cs" />
+    <Compile Include="Vision\Contract\OcrResults.cs" />
+    <Compile Include="Vision\Contract\Rectangle.cs" />
+    <Compile Include="Vision\Contract\Region.cs" />
+    <Compile Include="Vision\Contract\Word.cs" />
+    <Compile Include="Vision\IVisionServiceClient.cs" />
+    <Compile Include="Vision\VisionServiceClient.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(SolutionDir)\packages\Newtonsoft.Json.6.0.8\lib\portable-net45+wp80+win8+wpa81+aspnetcore50\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\Portable\$(TargetFrameworkVersion)\Microsoft.Portable.CSharp.targets" />
+</Project>
