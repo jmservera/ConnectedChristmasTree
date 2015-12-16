@@ -242,7 +242,7 @@ namespace EmotionDetector
 
         private async void startReceiving(CancellationToken token)
         {
-            while (true)
+            while (!token.IsCancellationRequested)
             {
                 var message = await deviceClient.ReceiveAsync();
                 if(message!= null)
