@@ -5,6 +5,7 @@
     <ConfigurationSettings>
       <Setting name="Microsoft.WindowsAzure.Plugins.Diagnostics.ConnectionString" value="UseDevelopmentStorage=true" />
       <Setting name="IoTHubConnectionString" value="HostName=CCTPragueIOtHub.azure-devices.net;SharedAccessKeyName=iothubowner;SharedAccessKey=QHmO19Sb8WtM2Qp6HY6dfNHXhmagM+yx6Rz6pxC1rB4=" />
+      <Setting name="EventHubConnectionString" value="Endpoint=sb://oitoutputcct.servicebus.windows.net/;SharedAccessKeyName=manage;SharedAccessKey=LtKtpRgUjuwkQhbQ5UuP2Nr86QxsLOJACtxK+lrxb34=" />
     </ConfigurationSettings>
   </Role>
 </ServiceConfiguration>

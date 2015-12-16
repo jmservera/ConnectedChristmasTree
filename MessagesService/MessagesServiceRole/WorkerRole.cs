@@ -12,6 +12,7 @@ using Microsoft.WindowsAzure.Storage;
 using Microsoft.Azure.Devices;
 using Microsoft.ServiceBus.Messaging;
 using Microsoft.Azure.Devices.Common;
+using System.Text;
 
 namespace MessagesServiceRole
 {
@@ -20,6 +21,7 @@ namespace MessagesServiceRole
         private readonly CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
         private readonly ManualResetEvent runCompleteEvent = new ManualResetEvent(false);
         string iotHubConnectionString;
+        string eventHubConnectionString;
 
         public override void Run()
         {
@@ -54,6 +56,7 @@ namespace MessagesServiceRole
         private void readSettings()
         {
             iotHubConnectionString = CloudConfigurationManager.GetSetting("IoTHubConnectionString");
+            eventHubConnectionString = CloudConfigurationManager.GetSetting("EventHubConnectionString");
         }
 
         public override void OnStop()
@@ -77,31 +80,88 @@ namespace MessagesServiceRole
             string emotionPartition = EventHubPartitionKeyResolver.ResolveToPartition("EmotionDetector", eventHubPartitionsCount);
             var emotionEventHubReceiver = eventHubClient.GetConsumerGroup("message").CreateReceiver(emotionPartition, DateTime.Now);
 
+            var streamClient = EventHubClient.CreateFromConnectionString(eventHubConnectionString, "ioteventhubcct");
+            var streamClientInfo = streamClient.GetRuntimeInformation();
+            var partitions = streamClientInfo.PartitionIds;
+            List<Task> streamTasks = new List<Task>();
+            foreach (var partition in partitions)
+            {
+                var partReceiver = await streamClient.GetDefaultConsumerGroup().CreateReceiverAsync(partition);
+                var task = Task.Run(async () =>
+                {
+                    // TODO: Replace the following with your own logic.
+                    while (!cancellationToken.IsCancellationRequested)
+                    {
+                        var messages = await partReceiver.ReceiveAsync(20);
+                        await resolveMessages(client, messages);
+                        //client.SendAsync("Tree",...)
+                        //client.SendAsync("EmotionDetector",...)
+                        await Task.Delay(1000);
+                    }
+                }, cancellationToken);
+                streamTasks.Add(task);
+            }
+
             string treePartition = EventHubPartitionKeyResolver.ResolveToPartition("Tree", eventHubPartitionsCount);
             var treeEventHubReceiver = eventHubClient.GetConsumerGroup("message").CreateReceiver(treePartition, DateTime.Now);
 
-            // TODO: Replace the following with your own logic.
-            while (!cancellationToken.IsCancellationRequested)
+            var t1 = Task.Run(async () =>
+             {
+                // TODO: Replace the following with your own logic.
+                while (!cancellationToken.IsCancellationRequested)
+                 {
+                     var messages = await emotionEventHubReceiver.ReceiveAsync(20);
+                     await resolveMessages(client, messages);
+                    //client.SendAsync("Tree",...)
+                    //client.SendAsync("EmotionDetector",...)
+                    await Task.Delay(1000);
+                 }
+             }, cancellationToken);
+            streamTasks.Add(t1);
+            var t2 = Task.Run(async () =>
             {
-                var messages=await emotionEventHubReceiver.ReceiveAsync(20);
-                var treeMessages= messages.Where((m) => {
-                        return m.SystemProperties.ContainsKey("to") &&  m.SystemProperties["to"]!=null;
-                    });
-                foreach(var m in treeMessages)
+                // TODO: Replace the following with your own logic.
+                while (!cancellationToken.IsCancellationRequested)
                 {
-                    Message message = new Message(m.GetBytes());
-                    message.Ack = DeliveryAcknowledgement.Full;
-                    message.MessageId = Guid.NewGuid().ToString();
-                    //m.SystemProperties["to"].ToString()
-                    await client.SendAsync(m.SystemProperties["to"].ToString(), message);
-                    System.Diagnostics.Debug.WriteLine("Message sent");
+                    var messages = await treeEventHubReceiver.ReceiveAsync(20);
+                    await resolveMessages(client, messages);
+                    //client.SendAsync("Tree",...)
+                    //client.SendAsync("EmotionDetector",...)
+                    await Task.Delay(1000);
                 }
-
-                //client.SendAsync("Tree",...)
-                //client.SendAsync("EmotionDetector",...)
-                await Task.Delay(1000);
-            }
+            }, cancellationToken);
+            streamTasks.Add(t2);
+            await Task.WhenAll(streamTasks);
         }
 
+        private static async Task resolveMessages(ServiceClient client, IEnumerable<EventData> messages)
+        {
+            var toMessages = messages.Where((m) =>
+            {
+                return m.SystemProperties.ContainsKey("to") && m.SystemProperties["to"] != null;
+            });
+            foreach (var m in toMessages)
+            {
+                Message message = new Message(m.GetBytes());
+                message.Ack = DeliveryAcknowledgement.Full;
+                message.MessageId = Guid.NewGuid().ToString();
+                await client.SendAsync(m.SystemProperties["to"].ToString(), message);
+                Debug.WriteLine("Message sent");
+            }
+
+            var treeMessages = messages.Where((m) =>
+            {
+                string s = Encoding.UTF8.GetString(m.GetBytes());
+                return s != null && s.Contains("Heartrate");
+            });
+            foreach (var t in treeMessages)
+            {
+                Message message = new Message(t.GetBytes());
+                message.Ack = DeliveryAcknowledgement.Full;
+                message.MessageId = Guid.NewGuid().ToString();
+                await client.SendAsync("Tree", message);
+                Debug.WriteLine("Tree Message sent");
+            }
+        }
     }
 }
