@@ -36,6 +36,7 @@ namespace EmotionDetector
         EmotionServiceClient emotionClient = new EmotionServiceClient(EmotionAPIKey);
         VisionServiceClient visionClient = new VisionServiceClient(VisionAPIKey);
 
+        UltrasonicDistanceSensor distanceSensor = new UltrasonicDistanceSensor(23, 24);
 
         public MainPage()
         {
@@ -45,10 +46,32 @@ namespace EmotionDetector
         protected async override void OnNavigatedTo(NavigationEventArgs e)
         {
             base.OnNavigatedTo(e);
-            if (await Init())
+            //if (await Init())
+            //{
+            //    dispatcherTimer.Tick += GetEmotions;
+            //    dispatcherTimer.Start();
+            //}
+            startDistanceSensor();
+
+        }
+
+
+        private async void startDistanceSensor()
+        {
+            await distanceSensor.InitAsync();
+
+            while (true)
             {
-                dispatcherTimer.Tick += GetEmotions;
-                dispatcherTimer.Start();
+                try
+                {
+                    var distance = await distanceSensor.GetDistanceInCmAsync(1000);
+                    log($"The distance is {distance} cm");
+                }
+                catch (TimeoutException ex)
+                {
+                    log(ex.Message);
+                }
+                await Task.Delay(1000);
             }
         }
 
