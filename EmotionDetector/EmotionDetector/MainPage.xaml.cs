@@ -7,6 +7,7 @@ using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
 using Windows.Devices.Enumeration;
+using Windows.Devices.Gpio;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
 using Windows.Media.Capture;
@@ -38,6 +39,8 @@ namespace EmotionDetector
 
         UltrasonicDistanceSensor distanceSensor = new UltrasonicDistanceSensor(23, 24);
 
+        Windows.Devices.Gpio.GpioPin buttonPin;
+
         public MainPage()
         {
             this.InitializeComponent();
@@ -46,26 +49,56 @@ namespace EmotionDetector
         protected async override void OnNavigatedTo(NavigationEventArgs e)
         {
             base.OnNavigatedTo(e);
-            //if (await Init())
-            //{
-            //    dispatcherTimer.Tick += GetEmotions;
-            //    dispatcherTimer.Start();
-            //}
-            startDistanceSensor();
 
+            var controller = GpioController.GetDefault();
+            buttonPin = controller.OpenPin(4);
+            if (buttonPin.IsDriveModeSupported(GpioPinDriveMode.InputPullUp))
+                buttonPin.SetDriveMode(GpioPinDriveMode.InputPullUp);
+            else
+                buttonPin.SetDriveMode(GpioPinDriveMode.Input);
+            buttonPin.DebounceTimeout = TimeSpan.FromMilliseconds(50);
+            buttonPin.ValueChanged += Pin_ValueChanged;
+
+            if (await Init())
+            {
+                while (true)
+                {
+                    await Task.Delay(1000);
+                    await waitForPerson();
+                    //take a picture
+                    //dispatcherTimer.Tick += GetEmotions;
+                    //dispatcherTimer.Start();
+
+                    //send a message to the tree: lights on
+
+                    // take another picture
+
+                    //send a message to the tree: change lights depending on mood
+
+                }
+            }
         }
 
-
-        private async void startDistanceSensor()
+        private void Pin_ValueChanged(Windows.Devices.Gpio.GpioPin sender, Windows.Devices.Gpio.GpioPinValueChangedEventArgs args)
         {
-            await distanceSensor.InitAsync();
+            if(args.Edge== Windows.Devices.Gpio.GpioPinEdge.FallingEdge)
+            {
+                log("button pushed");
+            }
+        }
 
+        private async Task waitForPerson()
+        {
             while (true)
             {
                 try
                 {
                     var distance = await distanceSensor.GetDistanceInCmAsync(1000);
                     log($"The distance is {distance} cm");
+                    if(distance < 150)
+                    {
+                        return;
+                    }
                 }
                 catch (TimeoutException ex)
                 {
@@ -75,11 +108,16 @@ namespace EmotionDetector
             }
         }
 
+
         uint width, height;
 
         private async Task<bool> Init()
         {
             try {
+                //sensor initialization
+                await distanceSensor.InitAsync();
+
+                //media capture initialization
                 log("finding devices");
                 mediaCapture = new MediaCapture();
                 var cameras = await DeviceInformation.FindAllAsync(DeviceClass.VideoCapture);
@@ -229,14 +267,17 @@ namespace EmotionDetector
             }
         }
 
-        private void log(string message)
+        private async void log(string message)
         {
             System.Diagnostics.Debug.WriteLine(message);
-            Log.Text = $"{message}\r\n{Log.Text}";
-            if (Log.Text.Length > 500)
+            await Log.Dispatcher.RunAsync( Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
-                Log.Text = Log.Text.Substring(0, 400);
-            }
+                Log.Text = $"{message}\r\n{Log.Text}";
+                if (Log.Text.Length > 500)
+                {
+                    Log.Text = Log.Text.Substring(0, 400);
+                }
+            });
 
         }
     }
