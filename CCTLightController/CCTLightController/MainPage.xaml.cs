@@ -22,15 +22,14 @@ namespace CCTLightController
         const int _pinGreenTop = 22;
         const int _pinRedTop = 27;
         const int _pinBlueTop = 18;
-        const int _defaultHeartRate = 180;
+        const int _defaultHeartRate = 80;
 
         Config configuration;
-
         Dictionary<int, LEDPin> pins = new Dictionary<int, LEDPin>();
         int[] RGBPins = new int[] { _pinGreenTop, _pinBlueTop, _pinRedTop };
-
         emotion currentEmotion = emotion.HAPPY;
         int currentHeartRate = _defaultHeartRate;
+        bool messageReceived = false;
 
         public MainPage()
         {
@@ -57,7 +56,8 @@ namespace CCTLightController
             Task animation = ControlAnimation();
 
             //await Task.WhenAll(ts, tr);
-            await Task.WhenAll(messageProcessing, animation);
+            await Task.WhenAll(animation, messageProcessing);
+            //await Task.WhenAll(messageProcessing);
         }
 
         private void InitializePins()
@@ -73,8 +73,14 @@ namespace CCTLightController
         {
             while (true)
             {
-                // determine delay based on heartrate (60: 5000, 180: 0)
-                await Task.Delay(5000 - Math.Min(Math.Max(currentHeartRate - 60, 0), 120) / 120 * 5000);
+                if (!messageReceived)
+                {
+                    await Task.Delay(500);
+                    continue;
+                }
+
+                // determine delay based on heartrate (60: 3000, 120: 0)
+                await Task.Delay(3000 - Math.Min(Math.Max(currentHeartRate - 60, 0), 60) / 60 * 3000);
 
                 await RunAnimation();
             }
@@ -126,10 +132,18 @@ namespace CCTLightController
 
                     if (receivedMessage != null)
                     {
-                        messageData = Encoding.ASCII.GetString(receivedMessage.GetBytes());
+                        messageData = Encoding.UTF8.GetString(receivedMessage.GetBytes());
+
+                        messages.Text = messageData;
+
+                        messageReceived = true;
 
                         //Process incoming message
-                        ProcessMessage(messageData);
+                        await ProcessMessage(messageData);
+
+                        //Send confirmation message
+                        await SendConfirmationMessage(deviceClient);
+
                         //Switch on command
                         await deviceClient.CompleteAsync(receivedMessage);
                     }
@@ -148,7 +162,7 @@ namespace CCTLightController
             }
         }
 
-        private void ProcessMessage(string messageData)
+        private async Task ProcessMessage(string messageData)
         {
             try
             {
@@ -172,7 +186,7 @@ namespace CCTLightController
 
                 try
                 {
-                    currentHeartRate = Convert.ToInt16(emotionData.heartrate);
+                    currentHeartRate = Math.Max(Convert.ToInt32(emotionData.heartrate), _defaultHeartRate);
                 }
                 catch (Exception ex)
                 {
@@ -185,6 +199,33 @@ namespace CCTLightController
                 currentHeartRate = _defaultHeartRate;
                 currentEmotion = emotion.NEUTRAL;
             }
+        }
+
+
+        private async Task SendConfirmationMessage(DeviceClient deviceClient)
+        {
+            try
+            {
+                string dataBuffer = "{\"lightState\": \"On\"}";
+                Message eventMessage = new Message(Encoding.UTF8.GetBytes(dataBuffer));
+
+                eventMessage.To = "EmotionDetector";
+
+                await deviceClient.SendEventAsync(eventMessage);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(ex.Message);
+            }
+        }
+
+        private async void SendMessage(object sender, RoutedEventArgs e)
+        {
+            var key = AuthenticationMethodFactory.CreateAuthenticationWithRegistrySymmetricKey(configuration.rpiName, configuration.deviceKey);
+            DeviceClient deviceClient = DeviceClient.Create(configuration.iotHubUri, key, TransportType.Http1);
+
+            await SendConfirmationMessage(deviceClient);
+
         }
 
         private void SadButton_Click(object sender, RoutedEventArgs e)

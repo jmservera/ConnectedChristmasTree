@@ -12,6 +12,7 @@
             <Button x:Name="SadButton" Content="SAD" Click="SadButton_Click" />
             <Button x:Name="HappyButton" Content="HAPPY" Click="HappyButton_Click" />
             <Button x:Name="NeutralButton" Content="NEUTRAL" Click="NeutralButton_Click" />
+            <Button x:Name="ConfirmationButton" Content="Send Confirmation" Click="SendMessage"/>
             <TextBlock x:Name="messages" Width="500" TextWrapping="Wrap"/>
         </StackPanel>
     </Grid>
