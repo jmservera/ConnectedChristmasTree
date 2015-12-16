@@ -86,7 +86,7 @@ namespace EmotionDetector
                 {
                     await Task.Delay(1000);
                     log("waiting for person");
-                    await waitForPerson();
+                    await waitForPerson(cancellationSource.Token);
                     log("person detected, getting emotion");
                     var guid = Guid.NewGuid();
                     //take a picture
@@ -157,7 +157,13 @@ namespace EmotionDetector
             }
         }
 
-        private async Task waitForPerson()
+        private async Task waitForPerson(CancellationToken token)
+        {
+            await waitForEmpty(token, 300);
+            await waitForObject(token, 150);
+        }
+
+        private async Task waitForEmpty(CancellationToken token, int minimumDistance)
         {
             while (true)
             {
@@ -165,7 +171,7 @@ namespace EmotionDetector
                 {
                     var distance = await distanceSensor.GetDistanceInCmAsync(1000);
                     log($"The distance is {distance} cm");
-                    if(distance < 150)
+                    if (distance > minimumDistance)
                     {
                         return;
                     }
@@ -174,10 +180,38 @@ namespace EmotionDetector
                 {
                     log(ex.Message);
                 }
+                if (token.IsCancellationRequested)
+                {
+                    return;
+                }
                 await Task.Delay(1000);
             }
         }
 
+        private async Task waitForObject(CancellationToken token, int maximumDistance)
+        {
+            while (true)
+            {
+                try
+                {
+                    var distance = await distanceSensor.GetDistanceInCmAsync(1000);
+                    log($"The distance is {distance} cm");
+                    if (distance < maximumDistance)
+                    {
+                        return;
+                    }
+                }
+                catch (TimeoutException ex)
+                {
+                    log(ex.Message);
+                }
+                if (token.IsCancellationRequested)
+                {
+                    return;
+                }
+                await Task.Delay(1000);
+            }
+        }
 
         uint width, height;
 
