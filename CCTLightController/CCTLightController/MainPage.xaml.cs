@@ -37,7 +37,7 @@ namespace CCTLightController
 
             ReadConfig();
 
-            InitializePins();
+            ResetLights();
             InitializeSensor();
         }
 
@@ -60,8 +60,10 @@ namespace CCTLightController
             //await Task.WhenAll(messageProcessing);
         }
 
-        private void InitializePins()
+        private void ResetLights()
         {
+            messageReceived = false;
+
             ToggleLight(_pinRedRow, false);
             ToggleLight(_pinGreenRow, false);
             ToggleLight(_pinBlueTop, false);
@@ -79,10 +81,14 @@ namespace CCTLightController
                     continue;
                 }
 
-                // determine delay based on heartrate (60: 3000, 120: 0)
-                await Task.Delay(3000 - Math.Min(Math.Max(currentHeartRate - 60, 0), 60) / 60 * 3000);
+                // determine delay based on heartrate (60: 500, 120: 0)
+                await Task.Delay(500 - Math.Min(Math.Max(currentHeartRate - 60, 0), 60) / 60 * 500);
 
-                await RunAnimation();
+                // Check again, because lights may have been switched off during Task.Delay
+                if (messageReceived)
+                {
+                    await RunAnimation();
+                }
             }
         }
 
@@ -168,29 +174,46 @@ namespace CCTLightController
             {
                 var emotionData = JsonConvert.DeserializeObject<EmotionHeartRateData>(messageData);
 
-                switch (emotionData.emotion)
+                if (emotionData != null)
                 {
-                    case "Happiness":
-                    case "Surprise":
-                        currentEmotion = emotion.HAPPY;
-                        break;
-                    case "Sadness":
-                    case "Disgust":
-                    case "Anger":
-                        currentEmotion = emotion.SAD;
-                        break;
-                    default:
+                    if (emotionData.stage == 0)
+                    {
+                        // Turn lights on - neutral state (person detected)
                         currentEmotion = emotion.NEUTRAL;
-                        break;
-                }
+                    }
+                    else if (emotionData.stage == 1)
+                    {
+                        // Change lights on based on person's emotion and heartrate
+                        switch (emotionData.emotion)
+                        {
+                            case "Happiness":
+                            case "Surprise":
+                                currentEmotion = emotion.HAPPY;
+                                break;
+                            case "Sadness":
+                            case "Disgust":
+                            case "Anger":
+                                currentEmotion = emotion.SAD;
+                                break;
+                            default:
+                                currentEmotion = emotion.NEUTRAL;
+                                break;
+                        }
+                    }
+                    else
+                    {
+                        // Person has left - switch lights off
+                        ResetLights();
+                    }
 
-                try
-                {
-                    currentHeartRate = Math.Max(Convert.ToInt32(emotionData.heartrate), _defaultHeartRate);
-                }
-                catch (Exception ex)
-                {
-                    currentHeartRate = _defaultHeartRate;
+                    try
+                    {
+                        currentHeartRate = Math.Max(Convert.ToInt32(emotionData.heartrate), _defaultHeartRate);
+                    }
+                    catch (Exception ex)
+                    {
+                        currentHeartRate = _defaultHeartRate;
+                    }
                 }
 
             }
@@ -300,6 +323,16 @@ namespace CCTLightController
 
             // Turn on requested colour
             ToggleLight(pinNumber, turnOn);
+        }
+
+        private void ResetButton_Click(object sender, RoutedEventArgs e)
+        {
+            ResetLights();
+        }
+
+        private void InitializeButton_Click(object sender, RoutedEventArgs e)
+        {
+            messageReceived = true;
         }
     }
 
