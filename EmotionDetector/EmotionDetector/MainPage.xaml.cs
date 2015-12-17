@@ -114,9 +114,9 @@ namespace EmotionDetector
                     while (!cancellationSource.IsCancellationRequested)
                     {
                         log("waiting for person");
-                        await waitForPerson(cancellationSource.Token);
-                        log("person detected, getting emotion");
                         var guid = Guid.NewGuid();
+                        await waitForPerson(cancellationSource.Token, deviceClient, guid);
+                        log("person detected, getting emotion");
                         //take a picture
                         var emotion = await GetEmotion(cancellationSource.Token);
                         if (emotion != null)
@@ -132,6 +132,7 @@ namespace EmotionDetector
                             log("Sending to tree");
                             await deviceClient.SendEventAsync(m);
                             log("Message sent");
+
                             //wait for the tree lights
                             await Task.Run(() =>
                             {
@@ -139,6 +140,7 @@ namespace EmotionDetector
                             });
                             log("Signal received, taking new emotion");
                             signal.Reset();
+                            await Task.Delay(8000);
 
                             emotion = await GetEmotion(cancellationSource.Token);
                             if (emotion != null)
@@ -198,16 +200,36 @@ namespace EmotionDetector
             startAsync();
         }
 
-        private async Task waitForPerson(CancellationToken token)
+        private async Task waitForPerson(CancellationToken token, DeviceClient client, Guid id)
         {
             //wait for clear room
-            await waitForDistance(token, d=> d>300);
+            await waitForDistance(token, d=> d>150);
+
+            EmotionResult emotion = new EmotionResult();
+            emotion.SessionId = id;
+            emotion.Stage = 2;
+            emotion.Emotion = "Dead";
+            emotion.Score = 0;
+            emotion.Date = DateTime.Now;
+            emotion.Id = "12";
+            log($"user is gone");
+
+            var emotionJson = Newtonsoft.Json.JsonConvert.SerializeObject(emotion);
+            
+            var m = new Message(Encoding.UTF8.GetBytes(emotionJson));
+           
+            await deviceClient.SendEventAsync(m);
+            log("User not present sent to tree");
+
+            await Task.Delay(5000);
+
             //wait until someone is in front
-            await waitForDistance(token, d => d<150);
+            await waitForDistance(token, d => d<100);
         }
 
         private async Task waitForDistance(CancellationToken token, Func<double,bool> distanceComparer)
         {
+            int count = 0;
             while (!token.IsCancellationRequested)
             {
                 if (distanceSensor != null)
@@ -215,11 +237,17 @@ namespace EmotionDetector
                     try
                     {
                         var distance = await distanceSensor.GetDistanceInCmAsync(1000);
-                        log($"The distance is {distance} cm");
-                        if (distanceComparer(distance))
-                        {
-                            return;
-                        }
+                            log($"The distance is {distance} cm");
+                            if (distanceComparer(distance))
+                            {
+                                if (count++ > 2)
+                                    return;
+                            }
+                            else
+                            {
+                                if(distance<3000)
+                                    count = 0;
+                            }
                     }
                     catch (TimeoutException ex)
                     {
@@ -230,7 +258,7 @@ namespace EmotionDetector
                 {
                     return;
                 }
-                await Task.Delay(1000,token);
+                await Task.Delay(500,token);
             }
         }
 
