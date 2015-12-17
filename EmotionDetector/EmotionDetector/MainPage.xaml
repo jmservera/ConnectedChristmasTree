@@ -16,6 +16,9 @@
             <CaptureElement Name="ViewFinder"/>
             <Canvas Name="RectangleCanvas"/>
         </Grid>
-        <TextBlock Name="Log" Grid.Row="1"/>
+        <StackPanel Orientation="Horizontal" Grid.Row="1">
+            <Button Content="Reset" Click="Button_Click"/>
+            <TextBlock Name="Log" Grid.Row="1"/>
+        </StackPanel>
     </Grid>
 </Page>
