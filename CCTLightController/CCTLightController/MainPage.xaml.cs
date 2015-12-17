@@ -174,6 +174,8 @@ namespace CCTLightController
             {
                 var emotionData = JsonConvert.DeserializeObject<EmotionHeartRateData>(messageData);
 
+                System.Diagnostics.Debug.WriteLine("received emo data: Stage {0}", emotionData.stage);
+
                 if (emotionData != null)
                 {
                     if (emotionData.stage == 0)
