@@ -23,6 +23,7 @@ using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
+using Windows.UI.Xaml.Media.Imaging;
 using Windows.UI.Xaml.Navigation;
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x409
@@ -114,11 +115,11 @@ namespace EmotionDetector
                     while (!cancellationSource.IsCancellationRequested)
                     {
                         log("waiting for person");
-                        await waitForPerson(cancellationSource.Token);
-                        log("person detected, getting emotion");
                         var guid = Guid.NewGuid();
+                        await waitForPerson(cancellationSource.Token, deviceClient, guid);
+                        log("person detected, getting emotion");
                         //take a picture
-                        var emotion = await GetEmotion(cancellationSource.Token);
+                        var emotion = await GetEmotion(cancellationSource.Token,0);
                         if (emotion != null)
                         {
                             log($"emotion detected: {emotion.Emotion} {emotion.Score}");
@@ -132,6 +133,7 @@ namespace EmotionDetector
                             log("Sending to tree");
                             await deviceClient.SendEventAsync(m);
                             log("Message sent");
+
                             //wait for the tree lights
                             await Task.Run(() =>
                             {
@@ -139,8 +141,9 @@ namespace EmotionDetector
                             });
                             log("Signal received, taking new emotion");
                             signal.Reset();
+                            await Task.Delay(8000);
 
-                            emotion = await GetEmotion(cancellationSource.Token);
+                            emotion = await GetEmotion(cancellationSource.Token,1);
                             if (emotion != null)
                             {
                                 emotion.SessionId = guid;
@@ -198,16 +201,36 @@ namespace EmotionDetector
             startAsync();
         }
 
-        private async Task waitForPerson(CancellationToken token)
+        private async Task waitForPerson(CancellationToken token, DeviceClient client, Guid id)
         {
             //wait for clear room
-            await waitForDistance(token, d=> d>300);
+            await waitForDistance(token, d=> d>150);
+
+            EmotionResult emotion = new EmotionResult();
+            emotion.SessionId = id;
+            emotion.Stage = 2;
+            emotion.Emotion = "Dead";
+            emotion.Score = 0;
+            emotion.Date = DateTime.Now;
+            emotion.Id = "12";
+            log($"user is gone");
+
+            var emotionJson = Newtonsoft.Json.JsonConvert.SerializeObject(emotion);
+            
+            var m = new Message(Encoding.UTF8.GetBytes(emotionJson));
+           
+            await deviceClient.SendEventAsync(m);
+            log("User not present sent to tree");
+
+            await Task.Delay(5000);
+
             //wait until someone is in front
-            await waitForDistance(token, d => d<150);
+            await waitForDistance(token, d => d<100);
         }
 
         private async Task waitForDistance(CancellationToken token, Func<double,bool> distanceComparer)
         {
+            int count = 0;
             while (!token.IsCancellationRequested)
             {
                 if (distanceSensor != null)
@@ -215,11 +238,17 @@ namespace EmotionDetector
                     try
                     {
                         var distance = await distanceSensor.GetDistanceInCmAsync(1000);
-                        log($"The distance is {distance} cm");
-                        if (distanceComparer(distance))
-                        {
-                            return;
-                        }
+                            log($"The distance is {distance} cm");
+                            if (distanceComparer(distance))
+                            {
+                                if (count++ > 2)
+                                    return;
+                            }
+                            else
+                            {
+                                if(distance<3000)
+                                    count = 0;
+                            }
                     }
                     catch (TimeoutException ex)
                     {
@@ -230,7 +259,7 @@ namespace EmotionDetector
                 {
                     return;
                 }
-                await Task.Delay(1000,token);
+                await Task.Delay(500,token);
             }
         }
 
@@ -312,7 +341,7 @@ namespace EmotionDetector
             }
         }
 
-        async Task<EmotionResult> GetEmotion(CancellationToken token)
+        async Task<EmotionResult> GetEmotion(CancellationToken token,int stage)
         {
             try
             {
@@ -323,6 +352,24 @@ namespace EmotionDetector
                     if (token.IsCancellationRequested)
                         return null;
                     mediaStream.Position = 0L;
+
+
+                    await this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
+                    {
+                        BitmapImage img = new BitmapImage();
+                        await img.SetSourceAsync(mediaStream.AsRandomAccessStream());
+
+                        if (stage == 0)
+                        {
+                            beforeImage.Source = img;
+                        }
+                        else if (stage == 1)
+                        {
+                            afterImage.Source = img;
+                        }
+                    });
+                    mediaStream.Position = 0L;
+
                     log("Getting emotion");
                     var emotions = await emotionClient.RecognizeAsync(mediaStream);
                     if (token.IsCancellationRequested)
@@ -343,7 +390,26 @@ namespace EmotionDetector
                                 new { Emotion="Surprise", Score= nearestOne.Scores.Surprise }};
 
                         var max = list.ToList().OrderByDescending(a => a.Score).First();
+                        //Show the picture
+                        await beforeImage.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal,  () =>
+                        {
+                            if (stage == 0)
+                            {
+                                beforeEmotion.Text = max.Emotion;
+                                beforeEmotionScore.Text = (max.Score * 100.0).ToString();
+                            }
+                            else if(stage==1)
+                            {
+                                
+                                afterEmotion.Text = max.Emotion;
+                                afterEmotionScore.Text = (max.Score * 100.0).ToString();
+                            }
+
+                        });
+
                         return new EmotionResult {Id="12", Date = DateTime.Now, Emotion = max.Emotion, Score = (int) (max.Score*100.0) };
+
+
                     }
                     else
                     {
