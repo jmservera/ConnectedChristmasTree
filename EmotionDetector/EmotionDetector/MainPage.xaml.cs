@@ -23,6 +23,7 @@ using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
+using Windows.UI.Xaml.Media.Imaging;
 using Windows.UI.Xaml.Navigation;
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x409
@@ -118,7 +119,7 @@ namespace EmotionDetector
                         await waitForPerson(cancellationSource.Token, deviceClient, guid);
                         log("person detected, getting emotion");
                         //take a picture
-                        var emotion = await GetEmotion(cancellationSource.Token);
+                        var emotion = await GetEmotion(cancellationSource.Token,0);
                         if (emotion != null)
                         {
                             log($"emotion detected: {emotion.Emotion} {emotion.Score}");
@@ -142,7 +143,7 @@ namespace EmotionDetector
                             signal.Reset();
                             await Task.Delay(8000);
 
-                            emotion = await GetEmotion(cancellationSource.Token);
+                            emotion = await GetEmotion(cancellationSource.Token,1);
                             if (emotion != null)
                             {
                                 emotion.SessionId = guid;
@@ -340,7 +341,7 @@ namespace EmotionDetector
             }
         }
 
-        async Task<EmotionResult> GetEmotion(CancellationToken token)
+        async Task<EmotionResult> GetEmotion(CancellationToken token,int stage)
         {
             try
             {
@@ -351,6 +352,24 @@ namespace EmotionDetector
                     if (token.IsCancellationRequested)
                         return null;
                     mediaStream.Position = 0L;
+
+
+                    await this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
+                    {
+                        BitmapImage img = new BitmapImage();
+                        await img.SetSourceAsync(mediaStream.AsRandomAccessStream());
+
+                        if (stage == 0)
+                        {
+                            beforeImage.Source = img;
+                        }
+                        else if (stage == 1)
+                        {
+                            afterImage.Source = img;
+                        }
+                    });
+                    mediaStream.Position = 0L;
+
                     log("Getting emotion");
                     var emotions = await emotionClient.RecognizeAsync(mediaStream);
                     if (token.IsCancellationRequested)
@@ -371,7 +390,26 @@ namespace EmotionDetector
                                 new { Emotion="Surprise", Score= nearestOne.Scores.Surprise }};
 
                         var max = list.ToList().OrderByDescending(a => a.Score).First();
+                        //Show the picture
+                        await beforeImage.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal,  () =>
+                        {
+                            if (stage == 0)
+                            {
+                                beforeEmotion.Text = max.Emotion;
+                                beforeEmotionScore.Text = (max.Score * 100.0).ToString();
+                            }
+                            else if(stage==1)
+                            {
+                                
+                                afterEmotion.Text = max.Emotion;
+                                afterEmotionScore.Text = (max.Score * 100.0).ToString();
+                            }
+
+                        });
+
                         return new EmotionResult {Id="12", Date = DateTime.Now, Emotion = max.Emotion, Score = (int) (max.Score*100.0) };
+
+
                     }
                     else
                     {
