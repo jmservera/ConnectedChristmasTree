@@ -1,0 +1,8 @@
+﻿/* Rename this file to config.json
+   Set its build action to 'Content' and Copy Always
+ */
+{
+  "iotHubUri": "<YOUR IoTHub URI HERE>",
+  "deviceKey": "<YOUR DEVICE ACCESS KEY HERE>",
+  "rpiName": "<YOUR DEVICE NAME HERE>"
+}
