@@ -1,6 +1,5 @@
 ﻿using Microsoft.Azure.Devices.Client;
 using Microsoft.ProjectOxford.Emotion;
-using Microsoft.ProjectOxford.Vision;
 using Newtonsoft.Json;
 using Shared;
 using System;
@@ -60,7 +59,6 @@ namespace EmotionDetector
         MediaCapture mediaCapture;
         DispatcherTimer dispatcherTimer = new DispatcherTimer() { Interval = TimeSpan.FromSeconds(1) };
         EmotionServiceClient emotionClient;
-        VisionServiceClient visionClient;
         DeviceClient deviceClient;
 
 
@@ -79,7 +77,6 @@ namespace EmotionDetector
             this.InitializeComponent();
 
              emotionClient = new EmotionServiceClient(Config.Default.EmotionAPIKey);
-             visionClient = new VisionServiceClient(Config.Default.VisionAPIKey);
         }
 
         protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -95,13 +92,20 @@ namespace EmotionDetector
                 distanceSensor = new UltrasonicDistanceSensor(23, 24);
 
                 var controller = GpioController.GetDefault();
-                buttonPin = controller.OpenPin(4);
-                if (buttonPin.IsDriveModeSupported(GpioPinDriveMode.InputPullUp))
-                    buttonPin.SetDriveMode(GpioPinDriveMode.InputPullUp);
+                if (controller != null)
+                {
+                    buttonPin = controller.OpenPin(4);
+                    if (buttonPin.IsDriveModeSupported(GpioPinDriveMode.InputPullUp))
+                        buttonPin.SetDriveMode(GpioPinDriveMode.InputPullUp);
+                    else
+                        buttonPin.SetDriveMode(GpioPinDriveMode.Input);
+                    buttonPin.DebounceTimeout = TimeSpan.FromMilliseconds(50);
+                    buttonPin.ValueChanged += buttonValueChanged;
+                }
                 else
-                    buttonPin.SetDriveMode(GpioPinDriveMode.Input);
-                buttonPin.DebounceTimeout = TimeSpan.FromMilliseconds(50);
-                buttonPin.ValueChanged += buttonValueChanged;
+                {
+                    log("GpioController not present, cannot configure button.");
+                }
             }
             catch(Exception ex)
             {
@@ -334,10 +338,14 @@ namespace EmotionDetector
 
         private async Task initSensor(CancellationToken token)
         {
-            if (distanceSensor != null)
+            try
             {
                 //sensor initialization
                 await distanceSensor.InitAsync();
+            }
+            catch (Exception ex)
+            {
+                log(ex.Message);
             }
         }
 

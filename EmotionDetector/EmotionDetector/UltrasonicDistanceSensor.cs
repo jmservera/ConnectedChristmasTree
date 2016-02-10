@@ -14,16 +14,12 @@ namespace EmotionDetector
         private GpioPin gpioPinTrig;
         private GpioPin gpioPinEcho;
         bool init;
+        int trigGpioPin, echoGpioPin;
 
         public UltrasonicDistanceSensor(int trigGpioPin, int echoGpioPin)
         {
-            var gpio = GpioController.GetDefault();
-
-            gpioPinTrig = gpio.OpenPin(trigGpioPin);
-            gpioPinEcho = gpio.OpenPin(echoGpioPin);
-            gpioPinTrig.SetDriveMode(GpioPinDriveMode.Output);
-            gpioPinEcho.SetDriveMode(GpioPinDriveMode.Input);
-            gpioPinTrig.Write(GpioPinValue.Low);
+            this.trigGpioPin = trigGpioPin;
+            this.echoGpioPin = echoGpioPin;
         }
 
         public async Task<double> GetDistanceInCmAsync(int timeoutInMilliseconds)
@@ -57,10 +53,25 @@ namespace EmotionDetector
         {
             if (!init)
             {
-                //first time ensure the pin is low and wait two seconds
-                gpioPinTrig.Write(GpioPinValue.Low);
-                await Task.Delay(2000);
-                init = true;
+                var gpio = GpioController.GetDefault();
+
+                if (gpio != null)
+                {
+                    gpioPinTrig = gpio.OpenPin(trigGpioPin);
+                    gpioPinEcho = gpio.OpenPin(echoGpioPin);
+                    gpioPinTrig.SetDriveMode(GpioPinDriveMode.Output);
+                    gpioPinEcho.SetDriveMode(GpioPinDriveMode.Input);
+                    gpioPinTrig.Write(GpioPinValue.Low);
+
+                    //first time ensure the pin is low and wait two seconds
+                    gpioPinTrig.Write(GpioPinValue.Low);
+                    await Task.Delay(2000);
+                    init = true;
+                }
+                else
+                {
+                    throw new InvalidOperationException("Gpio not present");
+                }
             }
         }
 

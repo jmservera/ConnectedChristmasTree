@@ -5,6 +5,7 @@
     "Microsoft.ApplicationInsights.WindowsApps": "1.0.0",
     "Microsoft.Azure.Devices.Client": "1.0.0-preview-007",
     "Microsoft.NETCore.UniversalWindowsPlatform": "5.0.0",
+    "Microsoft.ProjectOxford.Emotion": "1.0.1.1",
     "Newtonsoft.Json": "7.0.1"
   },
   "frameworks": {
