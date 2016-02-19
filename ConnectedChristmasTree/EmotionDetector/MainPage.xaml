@@ -29,9 +29,6 @@
             
             <CaptureElement
                 Name="ViewFinder" />
-            <Canvas
-                Name="RectangleCanvas" />
-
             <TextBlock
                 HorizontalAlignment="Center"
                 Text="LIVE STREAM"
@@ -42,6 +39,7 @@
             Grid.Column="1">
             <Image
                 x:Name="beforeImage"></Image>
+            <Canvas x:Name="beforeRectangleCanvas"/>
             <TextBlock HorizontalAlignment="Center"
                 Text="BEFORE" Foreground="Black" FontSize="25" />
             <StackPanel VerticalAlignment="Bottom">
@@ -57,6 +55,7 @@
             Grid.Column="2">
             <Image
                 x:Name="afterImage"></Image>
+            <Canvas x:Name="afterRectangleCanvas"/>
             <TextBlock HorizontalAlignment="Center"
                 Text="AFTER" Foreground="Black"
                 FontSize="25" />

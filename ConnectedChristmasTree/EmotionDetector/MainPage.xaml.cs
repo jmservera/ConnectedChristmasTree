@@ -15,6 +15,8 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media.Imaging;
 using Windows.UI.Xaml.Navigation;
+using Microsoft.ProjectOxford.Common;
+using Windows.UI.Xaml.Media;
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x409
 
@@ -39,8 +41,7 @@ namespace EmotionDetector
         CustomWebService controllerService;
 
         CancellationTokenSource cancellationSource;
-
-
+        private int ratio;
 
         public MainPage()
         {
@@ -352,6 +353,7 @@ namespace EmotionDetector
             }
         }
 
+        uint captureWidth, captureHeight;
         private async Task initCamera(CancellationToken token)
         {
             //media capture initialization
@@ -377,6 +379,8 @@ namespace EmotionDetector
             log("initialized");
             var streamprops = mediaCapture.VideoDeviceController.GetMediaStreamProperties(MediaStreamType.Photo)
                 as VideoEncodingProperties;
+            captureWidth = streamprops.Width;
+            captureHeight = streamprops.Height;
             ViewFinder.Source = mediaCapture;
             if (token.IsCancellationRequested)
                 return;
@@ -435,7 +439,6 @@ namespace EmotionDetector
                         log("Emotion recognized");
                         var nearestOne = emotions.OrderByDescending(emotion => emotion.FaceRectangle.Height * emotion.FaceRectangle.Width).First();
 
-
                         var list = new[] { new { Emotion="Anger", Score= nearestOne.Scores.Anger },
                                 new { Emotion="Contempt", Score= nearestOne.Scores.Contempt},
                                 new { Emotion="Disgust", Score= nearestOne.Scores.Disgust },
@@ -451,12 +454,15 @@ namespace EmotionDetector
                         {
                             if (stage == 0)
                             {
+                                drawEmotionRectangle(beforeRectangleCanvas, nearestOne.FaceRectangle,
+                                    max.Score * 100, max.Emotion);
                                 beforeEmotion.Text = max.Emotion;
                                 beforeEmotionScore.Text = (max.Score * 100.0).ToString();
                             }
-                            else if(stage==1)
+                            else if (stage == 1)
                             {
-                                
+                                drawEmotionRectangle(afterRectangleCanvas, nearestOne.FaceRectangle,
+                                    max.Score * 100, max.Emotion);
                                 afterEmotion.Text = max.Emotion;
                                 afterEmotionScore.Text = (max.Score * 100.0).ToString();
                             }
@@ -478,6 +484,45 @@ namespace EmotionDetector
                 log(ex.Message);
             }
             return null;
+        }
+
+        private void drawEmotionRectangle(Canvas RectangleCanvas, Rectangle FaceRectangle, float score, string emotion)
+        {
+            double ratio = 1;
+            double leftMargin = 0;
+            double topMargin = 0;
+            if (captureWidth > 0)
+            {
+                var hratio = RectangleCanvas.ActualHeight / captureHeight;
+                var wratio = RectangleCanvas.ActualWidth / captureWidth;
+                if (hratio < wratio)
+                {
+                    ratio = hratio;
+                    leftMargin = (RectangleCanvas.ActualWidth - (captureWidth * ratio)) / 2;
+                }
+                else
+                {
+                    ratio = wratio;
+                    topMargin = (RectangleCanvas.ActualHeight - (captureHeight * ratio)) / 2;
+                }
+            }
+            RectangleCanvas.Children.Clear();
+            var r = new Windows.UI.Xaml.Shapes.Rectangle();
+            RectangleCanvas.Children.Add(r);
+            r.Stroke = new SolidColorBrush(Windows.UI.Colors.Yellow);
+            r.StrokeThickness = 5;
+            r.Width = FaceRectangle.Width * ratio;
+            r.Height = FaceRectangle.Height * ratio;
+            Canvas.SetLeft(r, (FaceRectangle.Left * ratio) + leftMargin);
+            Canvas.SetTop(r, (FaceRectangle.Top * ratio) + topMargin);
+            var t = new TextBlock();
+            RectangleCanvas.Children.Add(t);
+            t.Width = r.Width;
+            t.FontSize = 16;
+            t.Foreground = new SolidColorBrush(Windows.UI.Colors.Yellow);
+            Canvas.SetLeft(t, (FaceRectangle.Left * ratio) + leftMargin);
+            Canvas.SetTop(t, (FaceRectangle.Top * ratio) + topMargin + r.Height);
+            t.Text = $"{score:N1}% {emotion}";
         }
 
         private async void log(string message, [System.Runtime.CompilerServices.CallerMemberName] string caller="")

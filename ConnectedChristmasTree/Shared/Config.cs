@@ -15,6 +15,7 @@ namespace Shared
         public string IotHubUri { get; set; }
         public string DeviceName { get; set; }
         public string DeviceKey { get; set; }
+        public string PartnerDevice { get; set; }
 
         static Config _config;
         public static Config Default
