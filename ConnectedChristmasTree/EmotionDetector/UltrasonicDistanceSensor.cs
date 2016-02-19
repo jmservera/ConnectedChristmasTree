@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,7 +17,7 @@ namespace EmotionDetector
         private GpioPin gpioPinEcho;
         bool init;
         int trigGpioPin, echoGpioPin;
-
+        public bool Initialized { get { return init; } }
         public UltrasonicDistanceSensor(int trigGpioPin, int echoGpioPin)
         {
             this.trigGpioPin = trigGpioPin;
@@ -26,26 +28,40 @@ namespace EmotionDetector
         {
             return await Task.Run(() =>
             {
-                double distance = double.MaxValue;
-                // turn on the pulse
-                gpioPinTrig.Write(GpioPinValue.High);
-                var sw = Stopwatch.StartNew();
-                Task.Delay(TimeSpan.FromTicks(100)).Wait();
-                sw.Stop();
-                gpioPinTrig.Write(GpioPinValue.Low);
-
-                if (SpinWait.SpinUntil(() => { return gpioPinEcho.Read() != GpioPinValue.Low; }, timeoutInMilliseconds))
-                {
-                    var stopwatch = Stopwatch.StartNew();
-                    while (stopwatch.ElapsedMilliseconds < timeoutInMilliseconds && gpioPinEcho.Read() == GpioPinValue.High)
+                GCLatencyMode oldMode = GCSettings.LatencyMode;
+                try {
+                    GCSettings.LatencyMode = GCLatencyMode.LowLatency;
+                    double distance = double.MaxValue;
+                    // turn on the pulse
+                    gpioPinTrig.Write(GpioPinValue.High);
+                    Task.Delay(TimeSpan.FromTicks(100)).Wait();
+                    gpioPinTrig.Write(GpioPinValue.Low);
+                    var sw = Stopwatch.StartNew();
+                    bool timeout = false;
+                    while (gpioPinEcho.Read() == GpioPinValue.Low)
                     {
-                        distance = stopwatch.Elapsed.TotalSeconds * 17150;
+                        if (sw.ElapsedMilliseconds > timeoutInMilliseconds)
+                        {
+                            timeout = true;
+                            break;
+                        }
                     }
-                    stopwatch.Stop();
-                    Debug.WriteLine($"{sw.Elapsed.TotalSeconds} {distance}");
-                    return distance;
+                    if (!timeout)
+                    {
+                        sw.Restart();
+                        while (sw.ElapsedMilliseconds < timeoutInMilliseconds && gpioPinEcho.Read() == GpioPinValue.High)
+                        {
+                            distance = sw.Elapsed.TotalSeconds * 17150;
+                        }
+                        Debug.WriteLine($"{sw.Elapsed.TotalSeconds} {distance}");
+                        return distance;
+                    }
+                    throw new TimeoutException("The sensor did not respond in time.");
                 }
-                throw new TimeoutException("Could not read from sensor");
+                finally
+                {
+                    GCSettings.LatencyMode = oldMode;
+                }
             });
         }
 
