@@ -1,0 +1,3 @@
+[submodule "ConnectedChristmasTree/BusProviders"]
+	path = ConnectedChristmasTree/BusProviders
+	url = https://github.com/ms-iot/BusProviders.git
