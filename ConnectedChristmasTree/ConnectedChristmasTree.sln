@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared", "Shared\Shared.csp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CCTLightController", "CCTLightController\CCTLightController.csproj", "{0A235133-ACC7-4D0E-85D2-4E9B49CDDC1E}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PwmSoftware", "BusProviders\PWM\PwmSoftware\PwmSoftware.vcxproj", "{07864646-FA68-4C58-84CF-9470B0428301}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -79,6 +81,20 @@ Global
 		{0A235133-ACC7-4D0E-85D2-4E9B49CDDC1E}.Release|x86.ActiveCfg = Release|x86
 		{0A235133-ACC7-4D0E-85D2-4E9B49CDDC1E}.Release|x86.Build.0 = Release|x86
 		{0A235133-ACC7-4D0E-85D2-4E9B49CDDC1E}.Release|x86.Deploy.0 = Release|x86
+		{07864646-FA68-4C58-84CF-9470B0428301}.Debug|Any CPU.ActiveCfg = Debug|Win32
+		{07864646-FA68-4C58-84CF-9470B0428301}.Debug|ARM.ActiveCfg = Debug|ARM
+		{07864646-FA68-4C58-84CF-9470B0428301}.Debug|ARM.Build.0 = Debug|ARM
+		{07864646-FA68-4C58-84CF-9470B0428301}.Debug|x64.ActiveCfg = Debug|x64
+		{07864646-FA68-4C58-84CF-9470B0428301}.Debug|x64.Build.0 = Debug|x64
+		{07864646-FA68-4C58-84CF-9470B0428301}.Debug|x86.ActiveCfg = Debug|Win32
+		{07864646-FA68-4C58-84CF-9470B0428301}.Debug|x86.Build.0 = Debug|Win32
+		{07864646-FA68-4C58-84CF-9470B0428301}.Release|Any CPU.ActiveCfg = Release|Win32
+		{07864646-FA68-4C58-84CF-9470B0428301}.Release|ARM.ActiveCfg = Release|ARM
+		{07864646-FA68-4C58-84CF-9470B0428301}.Release|ARM.Build.0 = Release|ARM
+		{07864646-FA68-4C58-84CF-9470B0428301}.Release|x64.ActiveCfg = Release|x64
+		{07864646-FA68-4C58-84CF-9470B0428301}.Release|x64.Build.0 = Release|x64
+		{07864646-FA68-4C58-84CF-9470B0428301}.Release|x86.ActiveCfg = Release|Win32
+		{07864646-FA68-4C58-84CF-9470B0428301}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -5,6 +5,7 @@
     xmlns:local="using:EmotionDetector"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    DataContext="{Binding RelativeSource={RelativeSource Self}}"
     mc:Ignorable="d">
 
     <Grid
@@ -71,14 +72,21 @@
         <StackPanel Grid.ColumnSpan="3"
             Grid.Row="1"
             Orientation="Horizontal">
+            <Grid Width="250" Padding="10">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
             <Button
+                Grid.Row="1"
                 Content="Reset"
                 Click="Button_Click" />
-            <!--<ListBox
-                Name="Log" />-->
+                <TextBlock>Distance: <Run Text="{Binding PersonDetector.Distance, Mode=OneWay}"/></TextBlock>
+            </Grid>
             <TextBlock
-                Name="Log"
-                Grid.Row="1" />
+                Name="LogBox"
+                />
         </StackPanel>
     </Grid>
 </Page>

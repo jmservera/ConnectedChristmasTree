@@ -39,6 +39,7 @@
     <Compile Include="Config.cs" />
     <Compile Include="CustomWebService.cs" />
     <Compile Include="EmotionResult.cs" />
+    <Compile Include="Logger.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

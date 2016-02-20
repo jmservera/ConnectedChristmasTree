@@ -9,6 +9,12 @@ using System.Threading.Tasks;
 using System.Text;
 using Newtonsoft.Json;
 using System.IO;
+using Shared;
+using Windows.Foundation.Metadata;
+using PwmSoftware;
+using Windows.Devices.Pwm;
+using Windows.UI;
+using System.Threading;
 
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x409
@@ -19,109 +25,153 @@ namespace CCTLightController
     {
         const int _pinGreenRow = 4;
         const int _pinRedRow = 17;
-        const int _pinGreenTop = 22;
-        const int _pinRedTop = 27;
-        const int _pinBlueTop = 18;
-        const int _defaultHeartRate = 80;
 
-        Config configuration;
         Dictionary<int, LEDPin> pins = new Dictionary<int, LEDPin>();
-        int[] RGBPins = new int[] { _pinGreenTop, _pinBlueTop, _pinRedTop };
-        emotion currentEmotion = emotion.HAPPY;
-        int currentHeartRate = _defaultHeartRate;
-        bool messageReceived = false;
+        EmotionHeartRateData data = new EmotionHeartRateData();
 
         public MainPage()
         {
             this.InitializeComponent();
-
-            ReadConfig();
-
             ResetLights();
             InitializeSensor();
         }
 
-        private void ReadConfig()
-        {
-            configuration = JsonConvert.DeserializeObject<Config>(File.ReadAllText("config.json"));
-        }
-
+        DeviceClient deviceClient;
+        RgbLed led;
         private async void InitializeSensor()
         {
-            var key = AuthenticationMethodFactory.CreateAuthenticationWithRegistrySymmetricKey(configuration.rpiName, configuration.deviceKey);
-            DeviceClient deviceClient = DeviceClient.Create(configuration.iotHubUri, key, TransportType.Http1);
+            var key = AuthenticationMethodFactory.CreateAuthenticationWithRegistrySymmetricKey(Config.Default.DeviceName, Config.Default.DeviceKey);
+            deviceClient = DeviceClient.Create(Config.Default.IotHubUri, key, TransportType.Http1);
 
-            //Task ts = SendEvents(deviceClient); 
-            Task messageProcessing = ReceiveCommands(deviceClient);
-            Task animation = ControlAnimation();
+            if (ApiInformation.IsApiContractPresent("Windows.Devices.DevicesLowLevelContract", 1))
+            {
+                try
+                {
+                    //comprueba que el GPIO exista
+                    var gpio = GpioController.GetDefaultAsync();
+                    if (gpio != null)
+                    {
+                        var provider = PwmProviderSoftware.GetPwmProvider();
+                        if (provider != null)
+                        {
+                            var controllers = (await PwmController.GetControllersAsync(provider));
+                            if (controllers != null)
+                            {
+                                var controller = controllers.FirstOrDefault();
+                                if (controller != null)
+                                {
+                                    controller.SetDesiredFrequency(100);
+                                    var pinR = controller.OpenPin(5);
+                                    var pinB = controller.OpenPin(6);
+                                    var pinG = controller.OpenPin(13);
+                                    led = new RgbLed(pinR, pinG, pinB);
+                                    led.On();
+                                    led.Color = Colors.White;
+                                    Task.Delay(50).Wait();
+                                    led.Color = Colors.Black;
 
-            //await Task.WhenAll(ts, tr);
-            await Task.WhenAll(animation, messageProcessing);
-            //await Task.WhenAll(messageProcessing);
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(ex.Message);
+                }
+            }
+            await ReceiveCommands(deviceClient);
         }
 
         private void ResetLights()
         {
-            messageReceived = false;
-
             ToggleLight(_pinRedRow, false);
             ToggleLight(_pinGreenRow, false);
-            ToggleLight(_pinBlueTop, false);
-            ToggleLight(_pinGreenTop, false);
-            ToggleLight(_pinRedTop, false);
-        }
-
-        private async Task ControlAnimation()
-        {
-            while (true)
+            if (led != null)
             {
-                if (!messageReceived)
+                led.Color = Colors.Black;
+                led.Off();
+            }
+        }
+        CancellationTokenSource tokenSource = new CancellationTokenSource();
+        private void changeLights()
+        {
+            tokenSource.Cancel();
+            tokenSource = new CancellationTokenSource();
+            if (data.UserPresent)
+            {
+                if (led != null)
                 {
-                    await Task.Delay(500);
-                    continue;
+                    switch (data.emotion)
+                    {
+                        case "happiness":
+                            led.Color = Colors.LightGreen;
+                            break;
+                        case "neutral":
+                            led.Color = Colors.Magenta;
+                            break;
+                        case "sadness":
+                            led.Color = Colors.OrangeRed;
+                            break;
+                        default:
+                            led.Color = Colors.White;
+                            break;
+                    }
+                    led.On();
                 }
+                animate(data, tokenSource.Token);
+            }
+            else
+            {
+                ResetLights();
 
-                // determine delay based on heartrate (60: 500, 120: 0)
-                await Task.Delay(500 - Math.Min(Math.Max(currentHeartRate - 60, 0), 60) / 60 * 500);
-
-                // Check again, because lights may have been switched off during Task.Delay
-                if (messageReceived)
-                {
-                    await RunAnimation();
-                }
             }
         }
 
-        private async Task RunAnimation()
+        private async void animate(EmotionHeartRateData data, CancellationToken token)
         {
-            foreach (LEDPin pin in pins.Values)
+            var blinking = Task.Run(async () =>
             {
-                bool turnOn = pin.State == GpioPinValue.High ? false : true;
-
-                if (RGBPins.Contains(pin.PinNumber))
+                bool on = false;
+                while (!token.IsCancellationRequested)
                 {
-                    // if an rgb pin
-                    if (currentEmotion == emotion.HAPPY)
+                    on = !on;
+                    foreach (var led in pins.Values)
                     {
-                        ToggleRGBLight(_pinGreenTop, true);
+                        ToggleLight(led.PinNumber, on);
                     }
-                    else if (currentEmotion == emotion.NEUTRAL)
-                    {
-                        ToggleRGBLight(_pinBlueTop, true);
-                    }
-                    else if (currentEmotion == emotion.SAD)
-                    {
-                        ToggleRGBLight(_pinRedTop, true);
-                    }
+                    await Task.Delay(500,token);
                 }
-                else
+            }, token);
+            var dimming = Task.Run(async () =>
+            {
+                bool up = false;
+                var originalColor = led.Color;
+                var newColor = originalColor;
+                while (!token.IsCancellationRequested)
                 {
-                    // standard LED
-                    ToggleLight(pin.PinNumber, turnOn);
+                    double deltaDown = 1.2;
+                    var delay = 60;
+                    if (up)
+                    {
+                        newColor = originalColor;
+                        delay = 800;
+                        up = false;
+                    }
+                    else
+                    {
+                        newColor = Color.FromArgb(255, (byte)(newColor.R / deltaDown), (byte)(newColor.G / deltaDown), (byte)(newColor.B / deltaDown));
+                        if (newColor == Colors.Black)
+                        {
+                            up = true;
+                            delay = 500;
+                        }
+                    }
+                    led.Color = newColor;
+                    await Task.Delay(delay,token);
                 }
-                //Random rand = new Random(DateTime.Now.Second);
-                //await Task.Delay(rand.Next(0, 200));
-            }
+            }, token);
+            await Task.WhenAll(blinking, dimming);
         }
 
         private async Task ReceiveCommands(DeviceClient deviceClient)
@@ -142,11 +192,8 @@ namespace CCTLightController
 
                         messages.Text = messageData;
 
-                        messageReceived = true;
-
                         //Process incoming message
-                        await ProcessMessage(messageData);
-
+                        ProcessMessage(messageData);
                         //Send confirmation message
                         await SendConfirmationMessage(deviceClient);
 
@@ -168,62 +215,18 @@ namespace CCTLightController
             }
         }
 
-        private async Task ProcessMessage(string messageData)
+        private void ProcessMessage(string messageData)
         {
             try
             {
-                var emotionData = JsonConvert.DeserializeObject<EmotionHeartRateData>(messageData);
-
-                System.Diagnostics.Debug.WriteLine("received emo data: Stage {0}", emotionData.stage);
-
-                if (emotionData != null)
-                {
-                    if (emotionData.stage == 0)
-                    {
-                        // Turn lights on - neutral state (person detected)
-                        currentEmotion = emotion.NEUTRAL;
-                    }
-                    else if (emotionData.stage == 1)
-                    {
-                        // Change lights on based on person's emotion and heartrate
-                        switch (emotionData.emotion)
-                        {
-                            case "Happiness":
-                            case "Surprise":
-                                currentEmotion = emotion.HAPPY;
-                                break;
-                            case "Sadness":
-                            case "Disgust":
-                            case "Anger":
-                                currentEmotion = emotion.SAD;
-                                break;
-                            default:
-                                currentEmotion = emotion.NEUTRAL;
-                                break;
-                        }
-                    }
-                    else
-                    {
-                        // Person has left - switch lights off
-                        ResetLights();
-                    }
-
-                    try
-                    {
-                        currentHeartRate = Math.Max(Convert.ToInt32(emotionData.heartrate), _defaultHeartRate);
-                    }
-                    catch (Exception ex)
-                    {
-                        currentHeartRate = _defaultHeartRate;
-                    }
-                }
-
+                data = JsonConvert.DeserializeObject<EmotionHeartRateData>(messageData);
+                System.Diagnostics.Debug.WriteLine("received emo data: Stage {0}", data.stage);
             }
             catch (Exception)
             {
-                currentHeartRate = _defaultHeartRate;
-                currentEmotion = emotion.NEUTRAL;
+                data = new EmotionHeartRateData();
             }
+            changeLights();
         }
 
 
@@ -246,24 +249,23 @@ namespace CCTLightController
 
         private async void SendMessage(object sender, RoutedEventArgs e)
         {
-            var key = AuthenticationMethodFactory.CreateAuthenticationWithRegistrySymmetricKey(configuration.rpiName, configuration.deviceKey);
-            DeviceClient deviceClient = DeviceClient.Create(configuration.iotHubUri, key, TransportType.Http1);
-
             await SendConfirmationMessage(deviceClient);
-
         }
 
         private void SadButton_Click(object sender, RoutedEventArgs e)
         {
-            currentEmotion = emotion.SAD;
+            data.emotion = "sadness";
+            changeLights();
         }
         private void HappyButton_Click(object sender, RoutedEventArgs e)
         {
-            currentEmotion = emotion.HAPPY;
+            data.emotion = "happiness";
+            changeLights();
         }
         private void NeutralButton_Click(object sender, RoutedEventArgs e)
         {
-            currentEmotion = emotion.NEUTRAL;
+            data.emotion = "neutral";
+            changeLights();
         }
 
         private void ToggleLight(int pinNumber, bool turnOn = true)
@@ -282,8 +284,7 @@ namespace CCTLightController
                     {
                         State = GpioPinValue.High,
                         GpioPin = gpioPin,
-                        PinNumber = pinNumber,
-                        IsRGB = RGBPins.Contains(pinNumber)
+                        PinNumber = pinNumber
                     };
                     pins.Add(pinNumber, pin);
                 }
@@ -313,20 +314,6 @@ namespace CCTLightController
             }
         }
 
-        private void ToggleRGBLight(int pinNumber, bool turnOn = true)
-        {
-            foreach (var pin in RGBPins)
-            {
-                if (pin != pinNumber)
-                {
-                    ToggleLight(pin, false);
-                }
-            }
-
-            // Turn on requested colour
-            ToggleLight(pinNumber, turnOn);
-        }
-
         private void ResetButton_Click(object sender, RoutedEventArgs e)
         {
             ResetLights();
@@ -334,7 +321,7 @@ namespace CCTLightController
 
         private void InitializeButton_Click(object sender, RoutedEventArgs e)
         {
-            messageReceived = true;
+            ResetLights();
         }
     }
 
@@ -352,11 +339,4 @@ namespace CCTLightController
         SAD,
         NEUTRAL
     };
-
-    public class Config
-    {
-        public string iotHubUri { get; set; }
-        public string deviceKey { get; set; }
-        public string rpiName { get; set; }
-    }
 }

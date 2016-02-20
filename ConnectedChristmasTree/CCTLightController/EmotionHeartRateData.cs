@@ -15,6 +15,7 @@ namespace CCTLightController
         public int stage { get; set; }
         public string emotion { get; set; }
         public int score { get; set; }
+        public bool UserPresent { get; set; }
     }
 
 }
