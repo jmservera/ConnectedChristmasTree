@@ -9,12 +9,7 @@
 
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <StackPanel>
-            <Button x:Name="SadButton" Content="SAD" Click="SadButton_Click" />
-            <Button x:Name="HappyButton" Content="HAPPY" Click="HappyButton_Click" />
-            <Button x:Name="NeutralButton" Content="NEUTRAL" Click="NeutralButton_Click" />
-            <Button x:Name="ConfirmationButton" Content="Send Confirmation" Click="SendMessage"/>
             <Button x:Name="ResetButton" Content="Reset" Click="ResetButton_Click"/>
-            <Button x:Name="InitializeButton" Content="Initialize" Click="InitializeButton_Click"/>
             <TextBlock x:Name="messages" Width="500" TextWrapping="Wrap"/>
 
             <Image x:Name="SongImage" Width="200" Height="200" Source="Assets/jb.png" Margin="20" />

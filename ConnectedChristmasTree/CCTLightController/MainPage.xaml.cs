@@ -1,55 +1,61 @@
-﻿using System;
+﻿using Microsoft.Azure.Devices.Client;
+using Newtonsoft.Json;
+using PwmSoftware;
+using Shared;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Windows.Devices.Gpio;
+using Windows.Devices.Pwm;
+using Windows.Foundation.Metadata;
+using Windows.UI;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
-using Windows.Devices.Gpio;
-using Microsoft.Azure.Devices.Client;
-using System.Threading.Tasks;
-using System.Text;
-using Newtonsoft.Json;
-using System.IO;
-using Shared;
-using Windows.Foundation.Metadata;
-using PwmSoftware;
-using Windows.Devices.Pwm;
-using Windows.UI;
-using System.Threading;
-
-
-// The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x409
 
 namespace CCTLightController
 {
     public sealed partial class MainPage : Page
     {
-        const int _pinGreenRow = 4;
-        const int _pinRedRow = 17;
+        const int greenRowPinNumber = 4;
+        const int redRowPinNumber = 17;
 
-        Dictionary<int, LEDPin> pins = new Dictionary<int, LEDPin>();
-        EmotionHeartRateData data = new EmotionHeartRateData();
+        const int ledPinNumberR = 5;
+        const int ledPinNumberG = 13;
+        const int ledPinNumberB = 6;
+
+        Dictionary<int, GpioPin> pins = new Dictionary<int, GpioPin>();
+        DeviceClient deviceClient;
+        EmotionHeartRateData emotionData = new EmotionHeartRateData();
+
+        GpioController controller;
+        RgbLed rgbLed;
+
+        CancellationTokenSource tokenSource = new CancellationTokenSource();
 
         public MainPage()
         {
             this.InitializeComponent();
-            ResetLights();
-            InitializeSensor();
+            initialize();
         }
 
-        DeviceClient deviceClient;
-        RgbLed led;
-        private async void InitializeSensor()
+        private async void initialize()
         {
+            controller = GpioController.GetDefault();
+            resetLights();
+            //IoTHub connection
             var key = AuthenticationMethodFactory.CreateAuthenticationWithRegistrySymmetricKey(Config.Default.DeviceName, Config.Default.DeviceKey);
             deviceClient = DeviceClient.Create(Config.Default.IotHubUri, key, TransportType.Http1);
 
+            //RGB LED PWM controller
             if (ApiInformation.IsApiContractPresent("Windows.Devices.DevicesLowLevelContract", 1))
             {
                 try
                 {
-                    //comprueba que el GPIO exista
-                    var gpio = GpioController.GetDefaultAsync();
-                    if (gpio != null)
+                    //check if the GPIO exists
+                    if (controller != null)
                     {
                         var provider = PwmProviderSoftware.GetPwmProvider();
                         if (provider != null)
@@ -61,15 +67,14 @@ namespace CCTLightController
                                 if (controller != null)
                                 {
                                     controller.SetDesiredFrequency(100);
-                                    var pinR = controller.OpenPin(5);
-                                    var pinB = controller.OpenPin(6);
-                                    var pinG = controller.OpenPin(13);
-                                    led = new RgbLed(pinR, pinG, pinB);
-                                    led.On();
-                                    led.Color = Colors.White;
+                                    var pinR = controller.OpenPin(ledPinNumberR);
+                                    var pinG = controller.OpenPin(ledPinNumberG);
+                                    var pinB = controller.OpenPin(ledPinNumberB);
+                                    rgbLed = new RgbLed(pinR, pinG, pinB);
+                                    rgbLed.On();
+                                    rgbLed.Color = Colors.White;
                                     Task.Delay(50).Wait();
-                                    led.Color = Colors.Black;
-
+                                    rgbLed.Color = Colors.Black;
                                 }
                             }
                         }
@@ -80,65 +85,78 @@ namespace CCTLightController
                     System.Diagnostics.Debug.WriteLine(ex.Message);
                 }
             }
-            await ReceiveCommands(deviceClient);
+
+            await receiveCommands(deviceClient);
         }
 
-        private void ResetLights()
+        private void resetLights()
         {
-            ToggleLight(_pinRedRow, false);
-            ToggleLight(_pinGreenRow, false);
-            if (led != null)
+            toggleLight(redRowPinNumber, false);
+            toggleLight(greenRowPinNumber, false);
+            if (rgbLed != null)
             {
-                led.Color = Colors.Black;
-                led.Off();
+                rgbLed.Color = Colors.Black;
+                rgbLed.Off();
             }
         }
-        CancellationTokenSource tokenSource = new CancellationTokenSource();
-        private void changeLights()
+        private async void changeLights()
         {
             tokenSource.Cancel();
             tokenSource = new CancellationTokenSource();
-            if (data.UserPresent)
+            if (emotionData.UserPresent)
             {
-                if (led != null)
+                if (rgbLed != null)
                 {
-                    switch (data.Emotion)
+                    switch (emotionData.Emotion)
                     {
                         case "happiness":
-                            led.Color = Colors.LightGreen;
+                            rgbLed.Color = Colors.LightGreen;
                             break;
                         case "neutral":
-                            led.Color = Colors.Magenta;
+                            rgbLed.Color = Colors.Magenta;
                             break;
                         case "sadness":
-                            led.Color = Colors.OrangeRed;
+                            rgbLed.Color = Colors.OrangeRed;
                             break;
                         default:
-                            led.Color = Colors.White;
+                            rgbLed.Color = Colors.White;
                             break;
                     }
-                    led.On();
+                        rgbLed.On();
                 }
-                animate(data, tokenSource.Token);
+                if (emotionData.Stage == 0)
+                {
+                    foreach(var pin in pins)
+                    {
+                        toggleLight(pin.Key);
+                    }
+
+                    await sendConfirmationMessage();
+                }
+                else
+                {
+                    animate(emotionData, tokenSource.Token);
+                }
             }
             else
             {
-                ResetLights();
+                resetLights();
             }
         }
 
         private async void animate(EmotionHeartRateData data, CancellationToken token)
         {
-            try {
+            try
+            {
                 var blinking = Task.Run(async () =>
                 {
                     bool on = false;
                     while (!token.IsCancellationRequested)
                     {
                         on = !on;
-                        foreach (var led in pins.Values)
+                        foreach (var led in pins)
                         {
-                            ToggleLight(led.PinNumber, on);
+                            toggleLight(led.Key, on);
                         }
                         await Task.Delay(500, token);
                     }
@@ -146,7 +164,7 @@ namespace CCTLightController
                 var dimming = Task.Run(async () =>
                 {
                     bool up = false;
-                    var originalColor = led.Color;
+                    var originalColor = rgbLed.Color;
                     var newColor = originalColor;
                     while (!token.IsCancellationRequested)
                     {
@@ -167,20 +185,24 @@ namespace CCTLightController
                                 delay = 500;
                             }
                         }
-                        led.Color = newColor;
+                        rgbLed.Color = newColor;
                         await Task.Delay(delay, token);
                     }
                 }, token);
                 await Task.WhenAll(blinking, dimming);
             }
-            catch(TaskCanceledException)
+            catch (TaskCanceledException)
             {
-                //it is ok
+                //it is ok, we use a cancellation token to cancel even if it is in a delay
                 Logger.Log("Animation stopped");
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"Unexpected: {ex.Message}");
             }
         }
 
-        private async Task ReceiveCommands(DeviceClient deviceClient)
+        private async Task receiveCommands(DeviceClient deviceClient)
         {
             System.Diagnostics.Debug.WriteLine("\nDevice waiting for commands from IoTHub...\n");
             Message receivedMessage;
@@ -199,11 +221,8 @@ namespace CCTLightController
                         messages.Text = messageData;
 
                         //Process incoming message
-                        ProcessMessage(messageData);
-                        //Send confirmation message
-                        await SendConfirmationMessage(deviceClient);
+                        processMessage(messageData);
 
-                        //Switch on command
                         await deviceClient.CompleteAsync(receivedMessage);
                     }
                     recoverTimeout = 1000;
@@ -221,28 +240,27 @@ namespace CCTLightController
             }
         }
 
-        private void ProcessMessage(string messageData)
+        private void processMessage(string messageData)
         {
             try
             {
-                data = JsonConvert.DeserializeObject<EmotionHeartRateData>(messageData);
-                System.Diagnostics.Debug.WriteLine("received emo data: Stage {0}", data.Stage);
+                emotionData = JsonConvert.DeserializeObject<EmotionHeartRateData>(messageData);
+                System.Diagnostics.Debug.WriteLine("received emo data: Stage {0}", emotionData.Stage);
             }
             catch (Exception)
             {
-                data = new EmotionHeartRateData();
+                emotionData = new EmotionHeartRateData();
             }
             changeLights();
         }
 
 
-        private async Task SendConfirmationMessage(DeviceClient deviceClient)
+        private async Task sendConfirmationMessage()
         {
             try
             {
                 string dataBuffer = "{\"lightState\": \"On\"}";
                 Message eventMessage = new Message(Encoding.UTF8.GetBytes(dataBuffer));
-
                 eventMessage.To = Config.Default.PartnerDevice;
 
                 await deviceClient.SendEventAsync(eventMessage);
@@ -253,96 +271,33 @@ namespace CCTLightController
             }
         }
 
-        private async void SendMessage(object sender, RoutedEventArgs e)
+        private void toggleLight(int pinNumber, bool turnOn = true)
         {
-            await SendConfirmationMessage(deviceClient);
-        }
-
-        private void SadButton_Click(object sender, RoutedEventArgs e)
-        {
-            data.Emotion = "sadness";
-            changeLights();
-        }
-        private void HappyButton_Click(object sender, RoutedEventArgs e)
-        {
-            data.Emotion = "happiness";
-            changeLights();
-        }
-        private void NeutralButton_Click(object sender, RoutedEventArgs e)
-        {
-            data.Emotion = "neutral";
-            changeLights();
-        }
-
-        private void ToggleLight(int pinNumber, bool turnOn = true)
-        {
-            if (Windows.Devices.Gpio.GpioController.GetDefault() != null)
+            if (controller != null)
             {
-                GpioController controller = GpioController.GetDefault();
-                LEDPin pin;
+                GpioPin pin;
 
                 // Lazy load pins into a dictionary
                 if (!pins.TryGetValue(pinNumber, out pin))
                 {
-                    var gpioPin = controller.OpenPin(pinNumber, GpioSharingMode.Exclusive);
-                    gpioPin.SetDriveMode(GpioPinDriveMode.Output);
-                    pin = new LEDPin()
-                    {
-                        State = GpioPinValue.High,
-                        GpioPin = gpioPin,
-                        PinNumber = pinNumber
-                    };
+                    pin = controller.OpenPin(pinNumber, GpioSharingMode.Exclusive);
+                    pin.SetDriveMode(GpioPinDriveMode.Output);
                     pins.Add(pinNumber, pin);
                 }
 
-                try
+                if (turnOn)
                 {
-                    // Only change light if state is different to desired state
-                    if (turnOn)
-                    {
-                        if (pin.State != GpioPinValue.High)
-                        {
-                            pin.GpioPin.Write(GpioPinValue.High);
-                            pin.State = GpioPinValue.High;
-                        }
-                    }
-                    else
-                    {
-                        if (pin.State != GpioPinValue.Low)
-                        {
-                            pin.GpioPin.Write(GpioPinValue.Low);
-                            pin.State = GpioPinValue.Low;
-                        }
-                    }
+                    pin.Write(GpioPinValue.High);
                 }
-                catch (Exception ex)
-                { }
+                else
+                {
+                    pin.Write(GpioPinValue.Low);
+                }
             }
         }
-
         private void ResetButton_Click(object sender, RoutedEventArgs e)
         {
-            ResetLights();
-        }
-
-        private void InitializeButton_Click(object sender, RoutedEventArgs e)
-        {
-            ResetLights();
+            resetLights();
         }
     }
-
-    public class LEDPin
-    {
-        public int PinNumber { get; set; }
-        public GpioPinValue State { get; set; }
-        public bool IsRGB { get; set; }
-        public GpioPin GpioPin { get; set; }
-    }
-
-    public enum emotion
-    {
-        HAPPY,
-        SAD,
-        NEUTRAL
-    };
 }
