@@ -56,8 +56,8 @@ namespace EmotionDetector
             Logger.MessageReceived += showLog;
             PersonDetector.SomeoneApproached += PersonDetector_SomeoneApproached;
             PersonDetector.SomeoneLeft += PersonDetector_SomeoneLeft;
-            PersonDetector.ShowThreshold = 100;
-            PersonDetector.NoShowThreshold = 150;
+            PersonDetector.ShowThreshold = 50;
+            PersonDetector.NoShowThreshold = 140;
             startAsync();
         }
 
@@ -86,6 +86,7 @@ namespace EmotionDetector
                             {
                                 Log($"emotion detected: {emotion.Emotion} {emotion.Score}");
                                 emotion.SessionId = session;
+                                emotion.UserPresent = true;
                                 //send a message to the tree: lights on
                                 await sendToTree(emotion);
                             }
@@ -98,6 +99,12 @@ namespace EmotionDetector
                     }
                 case Steps.PersonGone:
                     {
+                        if (lastStep != currentStep)
+                        {
+                            Log("user gone, sending message to tree");
+                            var emotion = new EmotionResult { SessionId = session, Date = DateTime.Now };
+                            await sendToTree(emotion);
+                        }
                         break;
                     }
                 case Steps.Lights:
@@ -109,6 +116,7 @@ namespace EmotionDetector
                         {
                             Log($"emotion detected: {emotion.Emotion} {emotion.Score}");
                             emotion.SessionId = session;
+                            emotion.UserPresent = true;
                             //send a message to the tree: lights on
                             await sendToTree(emotion);
                         }
@@ -122,7 +130,7 @@ namespace EmotionDetector
         {
             var emotionJson = Newtonsoft.Json.JsonConvert.SerializeObject(emotion);
             Message m = new Message(Encoding.UTF8.GetBytes(emotionJson));
-            // m.To = "Tree";
+            m.To = Config.Default.PartnerDevice;
             Log("Sending to tree");
             await deviceClient.SendEventAsync(m);
             Log("Message sent");
@@ -261,7 +269,7 @@ namespace EmotionDetector
                     Log($"Message received: {jsonMessage}");
                     if(jsonMessage!= null)
                     {
-                        signal.Set();
+                        nextStep(Steps.Lights);
                     }
                     await deviceClient.CompleteAsync(message);
                 }
@@ -303,45 +311,47 @@ namespace EmotionDetector
             Log("preview started");
         }
 
-        async Task<EmotionResult> GetEmotion(CancellationToken token,int stage)
+        async Task<EmotionResult> GetEmotion(CancellationToken token, int stage)
         {
             try
             {
-                Log("Capturing photo");
-                using (var mediaStream = new MemoryStream())
+                for (int retry = 0; retry < 2; retry++)
                 {
-                    await mediaCapture.CapturePhotoToStreamAsync(ImageEncodingProperties.CreateJpeg(), mediaStream.AsRandomAccessStream());
-                    if (token.IsCancellationRequested)
-                        return null;
-                    mediaStream.Position = 0L;
-
-
-                    await this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
+                    Log("Capturing photo");
+                    using (var mediaStream = new MemoryStream())
                     {
-                        BitmapImage img = new BitmapImage();
-                        await img.SetSourceAsync(mediaStream.AsRandomAccessStream());
+                        await mediaCapture.CapturePhotoToStreamAsync(ImageEncodingProperties.CreateJpeg(), mediaStream.AsRandomAccessStream());
+                        if (token.IsCancellationRequested)
+                            return null;
+                        mediaStream.Position = 0L;
 
-                        if (stage == 0)
+
+                        await this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
                         {
-                            beforeImage.Source = img;
-                        }
-                        else if (stage == 1)
+                            BitmapImage img = new BitmapImage();
+                            await img.SetSourceAsync(mediaStream.AsRandomAccessStream());
+
+                            if (stage == 0)
+                            {
+                                beforeImage.Source = img;
+                            }
+                            else if (stage == 1)
+                            {
+                                afterImage.Source = img;
+                            }
+                        });
+                        mediaStream.Position = 0L;
+
+                        Log("Getting emotion");
+                        var emotions = await emotionClient.RecognizeAsync(mediaStream);
+                        if (token.IsCancellationRequested)
+                            return null;
+                        if (emotions != null && emotions.Length > 0)
                         {
-                            afterImage.Source = img;
-                        }
-                    });
-                    mediaStream.Position = 0L;
+                            Log("Emotion recognized");
+                            var nearestOne = emotions.OrderByDescending(emotion => emotion.FaceRectangle.Height * emotion.FaceRectangle.Width).First();
 
-                    Log("Getting emotion");
-                    var emotions = await emotionClient.RecognizeAsync(mediaStream);
-                    if (token.IsCancellationRequested)
-                        return null;
-                    if (emotions != null && emotions.Length > 0)
-                    {
-                        Log("Emotion recognized");
-                        var nearestOne = emotions.OrderByDescending(emotion => emotion.FaceRectangle.Height * emotion.FaceRectangle.Width).First();
-
-                        var list = new[] { new { Emotion="Anger", Score= nearestOne.Scores.Anger },
+                            var list = new[] { new { Emotion="Anger", Score= nearestOne.Scores.Anger },
                                 new { Emotion="Contempt", Score= nearestOne.Scores.Contempt},
                                 new { Emotion="Disgust", Score= nearestOne.Scores.Disgust },
                                 new { Emotion="Fear", Score= nearestOne.Scores.Fear },
@@ -350,32 +360,33 @@ namespace EmotionDetector
                                 new { Emotion="Sadness", Score= nearestOne.Scores.Sadness },
                                 new { Emotion="Surprise", Score= nearestOne.Scores.Surprise }};
 
-                        var max = list.ToList().OrderByDescending(a => a.Score).First();
-                        //Show the picture
-                        await beforeImage.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal,  () =>
+                            var max = list.ToList().OrderByDescending(a => a.Score).First();
+                            //Show the picture
+                            await beforeImage.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                           {
+                               if (stage == 0)
+                               {
+                                   drawEmotionRectangle(beforeRectangleCanvas, nearestOne.FaceRectangle,
+                                       max.Score * 100, max.Emotion);
+                                   beforeEmotion.Text = max.Emotion;
+                                   beforeEmotionScore.Text = (max.Score * 100.0).ToString();
+                               }
+                               else if (stage == 1)
+                               {
+                                   drawEmotionRectangle(afterRectangleCanvas, nearestOne.FaceRectangle,
+                                       max.Score * 100, max.Emotion);
+                                   afterEmotion.Text = max.Emotion;
+                                   afterEmotionScore.Text = (max.Score * 100.0).ToString();
+                               }
+
+                           });
+
+                            return new EmotionResult { Id = "12", Date = DateTime.Now, Emotion = max.Emotion, Score = (int)(max.Score * 100.0), Stage = stage };
+                        }
+                        else
                         {
-                            if (stage == 0)
-                            {
-                                drawEmotionRectangle(beforeRectangleCanvas, nearestOne.FaceRectangle,
-                                    max.Score * 100, max.Emotion);
-                                beforeEmotion.Text = max.Emotion;
-                                beforeEmotionScore.Text = (max.Score * 100.0).ToString();
-                            }
-                            else if (stage == 1)
-                            {
-                                drawEmotionRectangle(afterRectangleCanvas, nearestOne.FaceRectangle,
-                                    max.Score * 100, max.Emotion);
-                                afterEmotion.Text = max.Emotion;
-                                afterEmotionScore.Text = (max.Score * 100.0).ToString();
-                            }
-
-                        });
-
-                        return new EmotionResult {Id="12", Date = DateTime.Now, Emotion = max.Emotion, Score = (int) (max.Score*100.0), Stage=stage };
-                    }
-                    else
-                    {
-                        Log("emotion not recognized");
+                            Log("emotion not recognized, retry");
+                        }
                     }
                 }
             }

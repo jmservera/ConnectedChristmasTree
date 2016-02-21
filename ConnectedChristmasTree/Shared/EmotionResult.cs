@@ -9,6 +9,8 @@ namespace Shared
     {
         public string Id { get; set; }
 
+        public bool UserPresent { get; set; }
+
         public Guid SessionId { get; set; }
         public DateTime Date { get; set; }
 

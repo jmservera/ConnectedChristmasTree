@@ -102,7 +102,7 @@ namespace CCTLightController
             {
                 if (led != null)
                 {
-                    switch (data.emotion)
+                    switch (data.Emotion)
                     {
                         case "happiness":
                             led.Color = Colors.LightGreen;
@@ -124,54 +124,60 @@ namespace CCTLightController
             else
             {
                 ResetLights();
-
             }
         }
 
         private async void animate(EmotionHeartRateData data, CancellationToken token)
         {
-            var blinking = Task.Run(async () =>
-            {
-                bool on = false;
-                while (!token.IsCancellationRequested)
+            try {
+                var blinking = Task.Run(async () =>
                 {
-                    on = !on;
-                    foreach (var led in pins.Values)
+                    bool on = false;
+                    while (!token.IsCancellationRequested)
                     {
-                        ToggleLight(led.PinNumber, on);
-                    }
-                    await Task.Delay(500,token);
-                }
-            }, token);
-            var dimming = Task.Run(async () =>
-            {
-                bool up = false;
-                var originalColor = led.Color;
-                var newColor = originalColor;
-                while (!token.IsCancellationRequested)
-                {
-                    double deltaDown = 1.2;
-                    var delay = 60;
-                    if (up)
-                    {
-                        newColor = originalColor;
-                        delay = 800;
-                        up = false;
-                    }
-                    else
-                    {
-                        newColor = Color.FromArgb(255, (byte)(newColor.R / deltaDown), (byte)(newColor.G / deltaDown), (byte)(newColor.B / deltaDown));
-                        if (newColor == Colors.Black)
+                        on = !on;
+                        foreach (var led in pins.Values)
                         {
-                            up = true;
-                            delay = 500;
+                            ToggleLight(led.PinNumber, on);
                         }
+                        await Task.Delay(500, token);
                     }
-                    led.Color = newColor;
-                    await Task.Delay(delay,token);
-                }
-            }, token);
-            await Task.WhenAll(blinking, dimming);
+                }, token);
+                var dimming = Task.Run(async () =>
+                {
+                    bool up = false;
+                    var originalColor = led.Color;
+                    var newColor = originalColor;
+                    while (!token.IsCancellationRequested)
+                    {
+                        double deltaDown = 1.2;
+                        var delay = 60;
+                        if (up)
+                        {
+                            newColor = originalColor;
+                            delay = 800;
+                            up = false;
+                        }
+                        else
+                        {
+                            newColor = Color.FromArgb(255, (byte)(newColor.R / deltaDown), (byte)(newColor.G / deltaDown), (byte)(newColor.B / deltaDown));
+                            if (newColor == Colors.Black)
+                            {
+                                up = true;
+                                delay = 500;
+                            }
+                        }
+                        led.Color = newColor;
+                        await Task.Delay(delay, token);
+                    }
+                }, token);
+                await Task.WhenAll(blinking, dimming);
+            }
+            catch(TaskCanceledException)
+            {
+                //it is ok
+                Logger.Log("Animation stopped");
+            }
         }
 
         private async Task ReceiveCommands(DeviceClient deviceClient)
@@ -220,7 +226,7 @@ namespace CCTLightController
             try
             {
                 data = JsonConvert.DeserializeObject<EmotionHeartRateData>(messageData);
-                System.Diagnostics.Debug.WriteLine("received emo data: Stage {0}", data.stage);
+                System.Diagnostics.Debug.WriteLine("received emo data: Stage {0}", data.Stage);
             }
             catch (Exception)
             {
@@ -237,7 +243,7 @@ namespace CCTLightController
                 string dataBuffer = "{\"lightState\": \"On\"}";
                 Message eventMessage = new Message(Encoding.UTF8.GetBytes(dataBuffer));
 
-                eventMessage.To = "EmotionDetector";
+                eventMessage.To = Config.Default.PartnerDevice;
 
                 await deviceClient.SendEventAsync(eventMessage);
             }
@@ -254,17 +260,17 @@ namespace CCTLightController
 
         private void SadButton_Click(object sender, RoutedEventArgs e)
         {
-            data.emotion = "sadness";
+            data.Emotion = "sadness";
             changeLights();
         }
         private void HappyButton_Click(object sender, RoutedEventArgs e)
         {
-            data.emotion = "happiness";
+            data.Emotion = "happiness";
             changeLights();
         }
         private void NeutralButton_Click(object sender, RoutedEventArgs e)
         {
-            data.emotion = "neutral";
+            data.Emotion = "neutral";
             changeLights();
         }
 
