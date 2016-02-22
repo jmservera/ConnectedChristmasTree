@@ -90,9 +90,7 @@
   <ItemGroup>
     <!-- A reference to the entire .Net Framework and Windows SDK are automatically included -->
     <Content Include="config.json" />
-    <None Include="config.json.dev">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
+    <None Include="config.json.dev" />
     <None Include="project.json" />
   </ItemGroup>
   <ItemGroup>
