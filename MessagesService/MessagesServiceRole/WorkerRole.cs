@@ -76,7 +76,7 @@ namespace MessagesServiceRole
             var hubName = builder.HostName.Split('.')[0];
             string eventHubPath = "messages/events";
             host = new EventProcessorHost("Worker RoleId: " + RoleEnvironment.CurrentRoleInstance.Id,
-                eventHubPath, EventHubConsumerGroup.DefaultGroupName, iotHubConnectionString,
+                eventHubPath, "cloudservice", iotHubConnectionString,
                 storageConnectionString,"messagesevents");
 
             await host.RegisterEventProcessorAsync<EventProcessor>(new EventProcessorOptions {
