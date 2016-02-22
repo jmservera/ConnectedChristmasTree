@@ -8,4 +8,21 @@ Configure the CCTLightController project:
 
 Create the Christmas Tree with a Rpi2 and some leds, resistors and one RGB Led:
 
-![Christmas Tree Leds](content/xmasTree_bb.svg)
+![Christmas Tree Leds](content/xmasTree_bb.png)
+
+Create the HR Sensor for activating the Emotion Detector camera with this schema:
+
+![Distance Sensor](content/distanceSensor_bb.png)
+
+
+Bill of materials:
+* Two Raspberry Pi 2
+* A bunch of LEDs
+* An RGB LED
+* An HC-SR04 distance sensor
+* Two Breadboards
+* Resistors:
+ * 1x 1K&ohm;
+ * 1x 2.2K&ohm;
+ * 3x 330&ohm;
+ * 2x 390&ohm;
