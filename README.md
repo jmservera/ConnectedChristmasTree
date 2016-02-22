@@ -16,6 +16,9 @@ Create the HR Sensor for activating the Emotion Detector camera with this schema
 
 
 Bill of materials:
+* IoT Hub with a consumer group named "cloudservice"
+ * You must register your devices in the IoT Hub with the Device manager application
+* A CloudService where you will deploy the MessagesService WorkerRole
 * Two Raspberry Pi 2
 * A bunch of LEDs
 * An RGB LED
