@@ -46,7 +46,7 @@ namespace EmotionDetector
 
         GpioPin buttonPin;
 
-        CustomWebService controllerService= new CustomWebService("8000");
+        CustomWebServer controllerService= new CustomWebServer("8000");
 
         CancellationTokenSource cancellationSource;
 
@@ -69,19 +69,51 @@ namespace EmotionDetector
 
         Steps lastStep;
         Guid session = Guid.Empty;
-
+        SemaphoreSlim semaphore = new SemaphoreSlim(1);
         private async void nextStep(Steps currentStep)
         {
-            switch (currentStep)
-            {
-                case Steps.PersonDetected:
-                    {
-                        if (lastStep != currentStep)
+            await semaphore.WaitAsync();
+            try {
+                switch (currentStep)
+                {
+                    case Steps.PersonDetected:
                         {
-                            session = Guid.NewGuid();
-                            Log("person detected, getting emotion");
+                            if (lastStep != currentStep)
+                            {
+                                session = Guid.NewGuid();
+                                Log("person detected, getting emotion");
+                                //take a picture
+                                var emotion = await GetEmotion(cancellationSource.Token, 0);
+                                if (emotion != null)
+                                {
+                                    Log($"emotion detected: {emotion.Emotion} {emotion.Score}");
+                                    emotion.SessionId = session;
+                                    emotion.UserPresent = true;
+                                    //send a message to the tree: lights on
+                                    await sendToTree(emotion);
+                                }
+                                else
+                                {
+                                    return; //do not set lastStep, have a second chance
+                                }
+                            }
+                            break;
+                        }
+                    case Steps.PersonGone:
+                        {
+                            if (lastStep != currentStep)
+                            {
+                                Log("user gone, sending message to tree");
+                                var emotion = new EmotionResult { SessionId = session, Date = DateTime.Now };
+                                await sendToTree(emotion);
+                            }
+                            break;
+                        }
+                    case Steps.Lights:
+                        {
+                            Log("Lights on, measure happiness");
                             //take a picture
-                            var emotion = await GetEmotion(cancellationSource.Token, 0);
+                            var emotion = await GetEmotion(cancellationSource.Token, 1);
                             if (emotion != null)
                             {
                                 Log($"emotion detected: {emotion.Emotion} {emotion.Score}");
@@ -90,40 +122,15 @@ namespace EmotionDetector
                                 //send a message to the tree: lights on
                                 await sendToTree(emotion);
                             }
-                            else
-                            {
-                                return; //do not set lastStep, have a second chance
-                            }
+                            break;
                         }
-                        break;
-                    }
-                case Steps.PersonGone:
-                    {
-                        if (lastStep != currentStep)
-                        {
-                            Log("user gone, sending message to tree");
-                            var emotion = new EmotionResult { SessionId = session, Date = DateTime.Now };
-                            await sendToTree(emotion);
-                        }
-                        break;
-                    }
-                case Steps.Lights:
-                    {
-                        Log("Lights on, measure happiness");
-                        //take a picture
-                        var emotion = await GetEmotion(cancellationSource.Token, 1);
-                        if (emotion != null)
-                        {
-                            Log($"emotion detected: {emotion.Emotion} {emotion.Score}");
-                            emotion.SessionId = session;
-                            emotion.UserPresent = true;
-                            //send a message to the tree: lights on
-                            await sendToTree(emotion);
-                        }
-                        break;
-                    }
+                }
+                lastStep = currentStep;
             }
-            lastStep= currentStep;
+            finally
+            {
+                semaphore.Release();
+            }
         }
 
         private async Task sendToTree(EmotionResult emotion)
@@ -381,7 +388,7 @@ namespace EmotionDetector
 
                            });
 
-                            return new EmotionResult { Id = "12", Date = DateTime.Now, Emotion = max.Emotion, Score = (int)(max.Score * 100.0), Stage = stage };
+                            return new EmotionResult { Date = DateTime.Now, Emotion = max.Emotion, Score = (int)(max.Score * 100.0), Stage = stage };
                         }
                         else
                         {

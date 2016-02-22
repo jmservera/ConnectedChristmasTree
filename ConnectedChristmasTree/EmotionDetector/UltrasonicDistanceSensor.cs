@@ -30,14 +30,15 @@ namespace EmotionDetector
             {
                 GCLatencyMode oldMode = GCSettings.LatencyMode;
                 try {
+                    var sw = new Stopwatch();
                     GCSettings.LatencyMode = GCLatencyMode.LowLatency;
                     double distance = double.MaxValue;
                     // turn on the pulse
                     gpioPinTrig.Write(GpioPinValue.High);
                     Task.Delay(TimeSpan.FromTicks(100)).Wait();
                     gpioPinTrig.Write(GpioPinValue.Low);
-                    var sw = Stopwatch.StartNew();
                     bool timeout = false;
+                    sw.Start();
                     while (gpioPinEcho.Read() == GpioPinValue.Low)
                     {
                         if (sw.ElapsedMilliseconds > timeoutInMilliseconds)
@@ -53,7 +54,6 @@ namespace EmotionDetector
                         {
                             distance = sw.Elapsed.TotalSeconds * 17150;
                         }
-                        Debug.WriteLine($"{sw.Elapsed.TotalSeconds} {distance}");
                         return distance;
                     }
                     throw new TimeoutException("The sensor did not respond in time.");

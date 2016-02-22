@@ -10,29 +10,29 @@ using Windows.Storage.Streams;
 
 namespace Shared
 {
-    public sealed class CustomWebService : IDisposable
+    public sealed class CustomWebServer : IDisposable
     {
         private const uint BufferSize = 8192;
         private string port;
         private readonly StreamSocketListener listener;
-        string html;
+        string htmlPath;
 
         public event EventHandler<string> CommandReceived;
         public string Port { get { return port; } }
 
-        public CustomWebService(string serverPort)
+        public CustomWebServer(string serverPort)
         {
             listener = new StreamSocketListener();
             listener.ConnectionReceived += (s, e) => ProcessRequestAsync(e.Socket);
             port = serverPort;
         }
-        public CustomWebService(int serverPort) : this(serverPort.ToString())
+        public CustomWebServer(int serverPort) : this(serverPort.ToString())
         {
         }
 
-        public IAsyncAction StartServerAsync(string htmlPath="content/Controller.html")
+        public IAsyncAction StartServerAsync(string htmlFilePath="content/Controller.html")
         {
-            html = File.ReadAllText(htmlPath);
+            htmlPath = htmlFilePath;
             return listener.BindServiceNameAsync(port);
         }
 
@@ -90,17 +90,14 @@ namespace Shared
             // Show the html 
             using (Stream resp = os.AsStreamForWrite())
             {
-                // Look in the Data subdirectory of the app package
-                byte[] bodyArray = Encoding.UTF8.GetBytes(html);
-                MemoryStream stream = new MemoryStream(bodyArray);
-                string header = String.Format("HTTP/1.1 200 OK\r\n" +
-                                  "Content-Length: {0}\r\n" +
-                                  "Connection: close\r\n\r\n",
-                                  stream.Length);
-                byte[] headerArray = Encoding.UTF8.GetBytes(header);
-                await resp.WriteAsync(headerArray, 0, headerArray.Length);
-                await stream.CopyToAsync(resp);
-                await resp.FlushAsync();
+                using (var file = File.OpenRead(htmlPath))
+                {
+                    string header = $"HTTP/1.1 200 OK\r\nContent-Length: {file.Length}\r\n" +
+                                     "Content-Type:text/html\r\nConnection: close\r\n\r\n";
+                    byte[] headerArray = Encoding.UTF8.GetBytes(header);
+                    await resp.WriteAsync(headerArray, 0, headerArray.Length);
+                    await file.CopyToAsync(resp);
+                }
             }
         }
     }
