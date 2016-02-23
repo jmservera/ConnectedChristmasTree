@@ -68,10 +68,7 @@ namespace Shared
                     var button = requestQuery.Split('=').FirstOrDefault();
                     if (button != null)
                     {
-                        if (CommandReceived != null)
-                        {
-                            CommandReceived(this, button);
-                        }
+                        CommandReceived?.Invoke(this, button);
                     }
                 }
 
