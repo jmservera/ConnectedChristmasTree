@@ -433,14 +433,21 @@ namespace EmotionDetector
             r.Height = FaceRectangle.Height * ratio;
             Canvas.SetLeft(r, (FaceRectangle.Left * ratio) + leftMargin);
             Canvas.SetTop(r, (FaceRectangle.Top * ratio) + topMargin);
+            Border b = new Border();
+            b.Background= new SolidColorBrush(Windows.UI.Colors.Yellow);
+            b.Width = r.Width;
+            RectangleCanvas.Children.Add(b);
+            b.Padding = new Thickness(2);
+
             var t = new TextBlock();
-            RectangleCanvas.Children.Add(t);
+            b.Child=t;
             t.Width = r.Width;
             t.FontSize = 16;
-            t.Foreground = new SolidColorBrush(Windows.UI.Colors.Yellow);
-            Canvas.SetLeft(t, (FaceRectangle.Left * ratio) + leftMargin);
-            Canvas.SetTop(t, (FaceRectangle.Top * ratio) + topMargin + r.Height);
+            t.Foreground = new SolidColorBrush(Windows.UI.Colors.Black);
+            Canvas.SetLeft(b, (FaceRectangle.Left * ratio) + leftMargin);
+            Canvas.SetTop(b, (FaceRectangle.Top * ratio) + topMargin + r.Height -1);
             t.Text = $"{emotion}\r\n{score:N1}%";
+            
         }
 
         private async void showLog(object caller, string message)
