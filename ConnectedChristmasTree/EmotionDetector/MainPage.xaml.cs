@@ -440,7 +440,7 @@ namespace EmotionDetector
             t.Foreground = new SolidColorBrush(Windows.UI.Colors.Yellow);
             Canvas.SetLeft(t, (FaceRectangle.Left * ratio) + leftMargin);
             Canvas.SetTop(t, (FaceRectangle.Top * ratio) + topMargin + r.Height);
-            t.Text = $"{score:N1}% {emotion}";
+            t.Text = $"{emotion}\r\n{score:N1}%";
         }
 
         private async void showLog(object caller, string message)
