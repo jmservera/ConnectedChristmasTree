@@ -3,9 +3,9 @@
   <Role name="MessagesServiceRole">
     <Instances count="1" />
     <ConfigurationSettings>
-      <Setting name="Microsoft.WindowsAzure.Plugins.Diagnostics.ConnectionString" value="UseDevelopmentStorage=true" />
+      <Setting name="Microsoft.WindowsAzure.Plugins.Diagnostics.ConnectionString" value="DefaultEndpointsProtocol=https;AccountName=cctservice;AccountKey=A/xLHIYIoKBf1S7PCRQvUTh2XZncIM7dWTRvyn34Ni96n7KqtnHGBkjvHZuQLAVC54XCWa1sKUyWiU7IlLWPng==" />
       <Setting name="IoTHubConnectionString" value="HostName=jmservera.azure-devices.net;SharedAccessKeyName=iothubowner;SharedAccessKey=xU7jEzGPrYAt6nnYBAXKlEdCfYwIkxM4fuouEJle8b4=" />
-      <Setting name="storageConnectionString" value="UseDevelopmentStorage=true" />
+      <Setting name="storageConnectionString" value="DefaultEndpointsProtocol=https;AccountName=cctservice;AccountKey=A/xLHIYIoKBf1S7PCRQvUTh2XZncIM7dWTRvyn34Ni96n7KqtnHGBkjvHZuQLAVC54XCWa1sKUyWiU7IlLWPng==" />
     </ConfigurationSettings>
   </Role>
 </ServiceConfiguration>

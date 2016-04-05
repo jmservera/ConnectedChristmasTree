@@ -99,34 +99,42 @@ namespace CCTLightController
                 rgbLed.Off();
             }
         }
+        string lastEmotion;
+        int lastStage=-1;
+
         private async void changeLights()
         {
-            tokenSource.Cancel();
-            tokenSource = new CancellationTokenSource();
             if (emotionData.UserPresent)
             {
                 if (rgbLed != null)
                 {
-                    switch (emotionData.Emotion)
+                    if (emotionData.Emotion != lastEmotion)
                     {
-                        case "happiness":
-                            rgbLed.Color = Colors.LightGreen;
-                            break;
-                        case "neutral":
-                            rgbLed.Color = Colors.Magenta;
-                            break;
-                        case "sadness":
-                            rgbLed.Color = Colors.OrangeRed;
-                            break;
-                        default:
-                            rgbLed.Color = Colors.White;
-                            break;
-                    }
+                        tokenSource.Cancel();
+                        tokenSource = new CancellationTokenSource();
+
+                        switch (emotionData.Emotion)
+                        {
+                            case "Happiness":
+                                rgbLed.Color = Colors.Green;
+                                break;
+                            case "Neutral":
+                                rgbLed.Color = Colors.Magenta;
+                                break;
+                            case "Sadness":
+                                rgbLed.Color = Colors.OrangeRed;
+                                break;
+                            default:
+                                rgbLed.Color = Colors.White;
+                                break;
+                        }
                         rgbLed.On();
+                    }
                 }
+
                 if (emotionData.Stage == 0)
                 {
-                    foreach(var pin in pins)
+                    foreach (var pin in pins)
                     {
                         toggleLight(pin.Key);
                     }
@@ -135,11 +143,22 @@ namespace CCTLightController
                 }
                 else
                 {
-                    animate(emotionData, tokenSource.Token);
+                    if (emotionData.Emotion != lastEmotion)
+                    {
+                        animate(emotionData, tokenSource.Token);
+                    }
                 }
+
+                lastEmotion = emotionData.Emotion;
+                lastStage = emotionData.Stage;
             }
             else
             {
+                lastStage = -1;
+                lastEmotion = null;
+                tokenSource.Cancel();
+                tokenSource = new CancellationTokenSource();
+
                 resetLights();
             }
         }

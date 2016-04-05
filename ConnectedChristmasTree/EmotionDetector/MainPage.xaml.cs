@@ -38,6 +38,7 @@ namespace EmotionDetector
 
         MediaCapture mediaCapture;
         EmotionServiceClient emotionClient= new EmotionServiceClient(Config.Default.EmotionAPIKey);
+
         DeviceClient deviceClient;
 
         ManualResetEventSlim signal=new ManualResetEventSlim(false);
@@ -59,12 +60,51 @@ namespace EmotionDetector
             PersonDetector.ShowThreshold = 50;
             PersonDetector.NoShowThreshold = 140;
             startAsync();
+            App.Current.Suspending += Current_Suspending;
+        }
+
+        private async void Current_Suspending(object sender, Windows.ApplicationModel.SuspendingEventArgs e)
+        {
+            var deferral=e.SuspendingOperation.GetDeferral();
+            try
+            {
+                await sendToTree(new EmotionResult { UserPresent = false });
+            }
+            finally
+            {
+                deferral.Complete();
+            }
         }
 
         private async void startAsync()
         {
             cancellationSource = new CancellationTokenSource();
             await InitAsync(cancellationSource.Token);
+            if (!stateMachine)
+            {
+                await Task.Run(async () => {
+                    while (!cancellationSource.IsCancellationRequested){
+                        try {
+                            var mood = await GetEmotion(cancellationSource.Token, 0);
+                            if (mood != null)
+                            {
+                                mood.UserPresent = true;
+                                mood.Stage = 1;
+                                await sendToTree(mood);
+                            }
+                            else
+                            {
+                               // await sendToTree(new EmotionResult { UserPresent = false });
+                            }
+                            await Task.Delay(500);
+                        }
+                        catch(Exception ex)
+                        {
+                            Log(ex.Message);
+                        }
+                    }
+                },cancellationSource.Token);
+            }
         }
 
         Steps lastStep;
@@ -210,6 +250,8 @@ namespace EmotionDetector
             }
         }
 
+        bool stateMachine = true;
+
         private async Task<bool> InitAsync(CancellationToken token)
         {
             cancellationSource = new CancellationTokenSource();
@@ -224,6 +266,11 @@ namespace EmotionDetector
                 await Task.WhenAll(init1, init2, init3);
                 PersonDetector.Start(token);
                 return true;
+            }
+            catch(InvalidOperationException ex)
+            {
+                stateMachine = false;
+                Log(ex.Message);
             }
             catch (Exception ex)
             {
@@ -317,7 +364,7 @@ namespace EmotionDetector
             await mediaCapture.StartPreviewAsync();
             Log("preview started");
         }
-
+        BitmapImage img;
         async Task<EmotionResult> GetEmotion(CancellationToken token, int stage)
         {
             try
@@ -330,25 +377,14 @@ namespace EmotionDetector
                         await mediaCapture.CapturePhotoToStreamAsync(ImageEncodingProperties.CreateJpeg(), mediaStream.AsRandomAccessStream());
                         if (token.IsCancellationRequested)
                             return null;
-                        mediaStream.Position = 0L;
-
-
-                        await this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
+                        await beforeImage.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
                         {
-                            BitmapImage img = new BitmapImage();
+                            mediaStream.Position = 0L;
+                            img = new BitmapImage();
                             await img.SetSourceAsync(mediaStream.AsRandomAccessStream());
-
-                            if (stage == 0)
-                            {
-                                beforeImage.Source = img;
-                            }
-                            else if (stage == 1)
-                            {
-                                afterImage.Source = img;
-                            }
                         });
-                        mediaStream.Position = 0L;
 
+                        mediaStream.Position = 0L;
                         Log("Getting emotion");
                         var emotions = await emotionClient.RecognizeAsync(mediaStream);
                         if (token.IsCancellationRequested)
@@ -371,21 +407,12 @@ namespace EmotionDetector
                             //Show the picture
                             await beforeImage.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
                            {
-                               if (stage == 0)
-                               {
-                                   drawEmotionRectangle(beforeRectangleCanvas, nearestOne.FaceRectangle,
+                               beforeImage.Source = img;
+
+                               drawEmotionRectangle(beforeRectangleCanvas, nearestOne.FaceRectangle,
                                        max.Score * 100, max.Emotion);
                                    beforeEmotion.Text = max.Emotion;
                                    beforeEmotionScore.Text = (max.Score * 100.0).ToString();
-                               }
-                               else if (stage == 1)
-                               {
-                                   drawEmotionRectangle(afterRectangleCanvas, nearestOne.FaceRectangle,
-                                       max.Score * 100, max.Emotion);
-                                   afterEmotion.Text = max.Emotion;
-                                   afterEmotionScore.Text = (max.Score * 100.0).ToString();
-                               }
-
                            });
 
                             return new EmotionResult { Date = DateTime.Now, Emotion = max.Emotion, Score = (int)(max.Score * 100.0), Stage = stage };
